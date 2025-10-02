@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QTimer, QSize, QByteArray, QPropertyAnimation, QAbstractAnimation
 from PySide6.QtGui import QPixmap, QPainter
+from .common_header import CommonHeader
 
 '''
 얼굴 인식 성공/실패 결과 표시하는 페이지
@@ -33,6 +34,9 @@ class ResultPage(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setAlignment(Qt.AlignCenter)
         main_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.common_header = CommonHeader(switch_callback=switch_callback)
+        main_layout.addWidget(self.common_header) 
         
         icon_size = 150
         

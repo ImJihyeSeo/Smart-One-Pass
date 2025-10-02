@@ -11,6 +11,7 @@ from PySide6.QtGui import QPixmap, QImage, QPainter, QBitmap, QColor, QPen
 
 from config import TARGET_W, TARGET_H, MESSAGE_AREA_HEIGHT, BORDER_RADIUS 
 from cv_tools import detect_faces
+from .common_header import CommonHeader
 
 '''
 웹캠 화면 표시하고, 얼굴 인식 과정을 시각적으로 처리해 결과를 result_page로 넘기는 페이지
@@ -42,58 +43,10 @@ class ProcessingPage(QWidget):
         main_layout = QVBoxLayout()
         main_layout.setAlignment(Qt.AlignCenter)
         
-        # 1. 상단 바 (X 버튼 포함)
-        top_bar = QHBoxLayout()
-        top_bar.setContentsMargins(0, 0, 0, 0)
-        top_bar.addStretch(1)
-        
-        exit_btn = QPushButton("X")
-        exit_btn.setFixedSize(40, 40)
-        exit_btn.setStyleSheet("""
-            QPushButton {
-                font-size: 20px;
-                color: #ffffff; 
-                background-color: transparent;
-                border: none;
-            }
-            QPushButton:hover {
-                color: #f44336;
-            }
-        """)
-        exit_btn.clicked.connect(lambda: self.switch_callback("idle"))
-        top_bar.addWidget(exit_btn)
+        self.common_header = CommonHeader(switch_callback=switch_callback)
+        main_layout.addWidget(self.common_header) 
 
-        # 2. 웹캠 위 정보 영역 (로고/텍스트)
-        self.info_container = QWidget()
-        self.info_container.setStyleSheet("background: transparent;")
-        info_layout = QVBoxLayout(self.info_container)
-        info_layout.setAlignment(Qt.AlignCenter)
-        info_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # 2-1. 로고 이미지
-        self.info_logo = QLabel()
-        try:
-            pixmap = QPixmap("resources/header_logo.png") 
-            logo_size = QSize(50, 50)
-            if not pixmap.isNull():
-                self.info_logo.setPixmap(pixmap.scaled(logo_size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                self.info_logo.setStyleSheet("background: transparent;")
-                self.info_logo.setAlignment(Qt.AlignCenter)
-            else:
-                raise FileNotFoundError("QPixmap failed to load the image.")
-        except Exception as e:
-            self.info_logo.setText("LOGO")
-            self.info_logo.setStyleSheet("font-size: 16px; color: yellow; background: transparent; padding: 5px;")
- 
-        # 2-2. 텍스트
-        self.info_text = QLabel("JeongSeok Smart One-Pass")
-        self.info_text.setAlignment(Qt.AlignCenter)
-        self.info_text.setStyleSheet("font-size: 14px; color: #aaaaaa; margin-top: 5px; background: transparent;")
-        
-        info_layout.addWidget(self.info_logo)
-        info_layout.addWidget(self.info_text)
-
-        # 3. 비디오 영역
+        # 비디오 영역
         self.video_label = QLabel()
         self.video_label.setFixedSize(self.TARGET_W, self.TARGET_H)
         self.video_label.setStyleSheet(f"""
@@ -103,7 +56,7 @@ class ProcessingPage(QWidget):
             }}
         """)
 
-        # 3-1. 반투명 오버레이 프레임 씌우기
+        # 반투명 오버레이 프레임 씌우기
         self.overlay_frame = QFrame(self.video_label) # video_label을 부모로 설정하여 겹침
         self.overlay_frame.setFixedSize(self.TARGET_W, self.TARGET_H)
         self.overlay_frame.setStyleSheet(f"""
@@ -113,14 +66,14 @@ class ProcessingPage(QWidget):
             }}
         """)
 
-        # 3-2. 입체감 부여
+        # 입체감 부여
         shadow = QGraphicsDropShadowEffect(self.video_label)
         shadow.setBlurRadius(20)
         shadow.setOffset(0, 8)
         shadow.setColor(QColor(0, 0, 0, 100))
         self.video_label.setGraphicsEffect(shadow)     
 
-        # 4. 메시지 영역
+        # 메시지 영역
         self.message_container = QWidget()
         self.message_container.setFixedHeight(MESSAGE_AREA_HEIGHT)
         self.message_container.setStyleSheet("background: transparent;")
@@ -134,10 +87,7 @@ class ProcessingPage(QWidget):
         
         message_layout.addWidget(self.instruction)
         
-        main_layout.addLayout(top_bar)
         main_layout.addStretch(1)
-        main_layout.addWidget(self.info_container, 0, Qt.AlignCenter)
-        main_layout.addStretch(2)
         main_layout.addWidget(self.video_label, 0, Qt.AlignCenter)
         main_layout.addStretch(1)
         main_layout.addWidget(self.message_container)
