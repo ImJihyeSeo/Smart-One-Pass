@@ -1,8 +1,3 @@
-import cv2
-import time
-import os
-import sys
-
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QGraphicsOpacityEffect
 )
@@ -11,17 +6,18 @@ from PySide6.QtGui import QPixmap, QPainter
 from .common_header import CommonHeader
 
 '''
-얼굴 인식 성공/실패 결과 표시하는 페이지
+얼굴 인식 성공/실패 결과 + 얼굴 등록 결과 표시하는 페이지
 '''
 class ResultPage(QWidget):
 
     '''
     결과 데이터(success, retries)에 따라 아이콘 파일과 안내 메시지 결정
     '''
-    def __init__(self, switch_callback, result_data):
+    def __init__(self, switch_callback, result_data, mode="auth"):
         super().__init__()
         self.switch_callback = switch_callback
         self.success, current_retries = result_data
+        self.mode = mode
         
         # 애니메이션 객체 초기화
         self.scale_animation = None
@@ -40,23 +36,36 @@ class ResultPage(QWidget):
         
         icon_size = 150
         
-        if self.success:
-            icon_file = "resources/check.png" 
-            main_message = f"환영합니다, ooo님!\n출입문이 열립니다." 
-            sub_message = ""
-            timeout_ms = 3000
-        
-        elif remaining_retries > 0:
-            icon_file = "resources/alert.png" 
-            main_message = f"인식 실패! 다시 시도해주세요."
-            sub_message = f"남은 횟수: {remaining_retries}회"
-            timeout_ms = 4000
+        if self.mode == "auth":
+            self.success, current_retries = result_data
+            remaining_retries = current_retries - 1 if not self.success else current_retries
 
-        else: # 최종 실패 (remaining_retries == 0)
-            icon_file = "resources/alert.png" 
-            main_message = f"인식에 최종 실패했습니다."
-            sub_message = "학생증을 이용해 주세요."
-            timeout_ms = 6000
+            if self.success:
+                icon_file = "resources/check.png"
+                main_message = "환영합니다, ooo님!\n출입문이 열립니다."
+                sub_message = ""
+                timeout_ms = 3000
+                next_page = "idle"
+            elif remaining_retries > 0:
+                icon_file = "resources/alert.png"
+                main_message = "인식 실패! 다시 시도해주세요."
+                sub_message = f"남은 횟수: {remaining_retries}회"
+                timeout_ms = 4000
+                next_page = "processing"
+            else:
+                icon_file = "resources/alert.png"
+                main_message = "인식에 최종 실패했습니다."
+                sub_message = "학생증을 이용해 주세요."
+                timeout_ms = 6000
+                next_page = "idle"
+        
+        elif self.mode == "enroll":
+            user_data = result_data  # {name, student_id}
+            icon_file = "resources/check.png"
+            main_message = f"{user_data['name']}님 (학번: {user_data['student_id']}),\n성공적으로 등록되었습니다"
+            sub_message = "메인 화면으로 자동 전환됩니다"
+            timeout_ms = 5000
+            next_page = "idle"                
 
         # 1. 중앙 아이콘
         self.icon_label = QLabel()

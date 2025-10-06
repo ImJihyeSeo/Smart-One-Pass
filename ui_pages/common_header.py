@@ -1,9 +1,6 @@
-'''
-상단 UI 요소
-X 버튼 + 학교 로고/타이틀 정보 영역
-'''
-
-from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
+from PySide6.QtWidgets import (
+    QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout
+)
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap
 
@@ -13,21 +10,68 @@ class CommonHeader(QWidget):
         super().__init__(parent)
         self.switch_callback = switch_callback
         self.setStyleSheet("background: transparent;")
+        self.setMaximumHeight(150)
         
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        # 버튼/여백 크기 정의
+        BUTTON_WIDTH = 40
+        BUTTON_MARGIN_TOP = 10
+        BUTTON_MARGIN_SIDE = 10
         
-        # 1. 상단 X 버튼
-        top_bar = QHBoxLayout()
-        top_bar.setContentsMargins(10, 10, 10, 10)
-        top_bar.addStretch(1)
+        # 메인 레이아웃
+        self.main_h_layout = QHBoxLayout(self)
+        self.main_h_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_h_layout.setSpacing(0)
+        self.main_h_layout.setAlignment(Qt.AlignTop)
         
-        exit_btn = QPushButton("X")
-        exit_btn.setFixedSize(40, 40)
-        exit_btn.setStyleSheet("""
+        # 1. 밸런스 위젯 - 왼쪽 공간 균형 맞추기 위함
+        balance_widget = QWidget(self)
+        balance_widget.setFixedWidth(BUTTON_WIDTH + BUTTON_MARGIN_SIDE) 
+        balance_widget.setStyleSheet("background: transparent;")
+        
+        balance_layout = QVBoxLayout(balance_widget)
+        balance_layout.setContentsMargins(BUTTON_MARGIN_SIDE, BUTTON_MARGIN_TOP, 0, 0) 
+        balance_layout.setSpacing(0)
+        
+        
+        # 2. 중앙 컨텐츠 영역
+        self.center_container = QWidget()
+        self.center_container.setStyleSheet("background: transparent;")
+        self.center_container.setMaximumHeight(150)
+        
+        center_layout = QVBoxLayout(self.center_container)
+        center_layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        center_layout.setContentsMargins(0, 50, 0, 0)
+
+        # 로고
+        self.logo_label = QLabel()
+        try:
+            pixmap = QPixmap("resources/header_logo.png")
+            logo_size = QSize(50, 50)
+            if not pixmap.isNull():
+                self.logo_label.setPixmap(pixmap.scaled(logo_size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            else:
+                self.logo_label.setText("LOGO")
+        except Exception:
+            self.logo_label.setText("LOGO")
+        self.logo_label.setStyleSheet("background: transparent; color: white;")
+        self.logo_label.setAlignment(Qt.AlignCenter)
+
+        # 텍스트
+        self.info_text = QLabel("JeongSeok Smart One-Pass")
+        self.info_text.setAlignment(Qt.AlignCenter)
+        self.info_text.setStyleSheet("font-size: 14px; color: #aaaaaa; background: transparent; margin-top: 5px;")
+
+        center_layout.addWidget(self.logo_label)
+        center_layout.addWidget(self.info_text)
+
+        
+        # 3. X 버튼
+        self.exit_btn = QPushButton("X")
+        self.exit_btn.setFixedSize(BUTTON_WIDTH, BUTTON_WIDTH)
+        self.exit_btn.setStyleSheet("""
             QPushButton {
                 font-size: 20px;
-                color: #ffffff; 
+                color: #ffffff;
                 background-color: transparent;
                 border: none;
             }
@@ -35,43 +79,18 @@ class CommonHeader(QWidget):
                 color: #f44336;
             }
         """)
-        exit_btn.clicked.connect(lambda: self.switch_callback("idle"))
-        top_bar.addWidget(exit_btn)
+        self.exit_btn.clicked.connect(lambda: self.switch_callback("idle"))
         
-        main_layout.addLayout(top_bar)
+        # X 버튼 담을 컨테이너 및 레이아웃
+        exit_container = QWidget()
+        exit_layout = QVBoxLayout(exit_container)
+        exit_layout.setContentsMargins(0, BUTTON_MARGIN_TOP, BUTTON_MARGIN_SIDE, 0) 
+        exit_layout.setSpacing(0)
+        exit_layout.addWidget(self.exit_btn, alignment=Qt.AlignTop | Qt.AlignRight)
         
-        # 2. 웹캠 위 로고/타이틀 영역
-        
-        self.info_container = QWidget()
-        self.info_container.setStyleSheet("background: transparent;")
-        info_layout = QVBoxLayout(self.info_container)
-        info_layout.setAlignment(Qt.AlignCenter)
-        info_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # 2-1. 로고
-        self.info_logo = QLabel()
-        try:
-            pixmap = QPixmap("resources/header_logo.png") 
-            logo_size = QSize(50, 50)
-            if not pixmap.isNull():
-                self.info_logo.setPixmap(pixmap.scaled(logo_size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                self.info_logo.setStyleSheet("background: transparent;")
-                self.info_logo.setAlignment(Qt.AlignCenter)
-            else:
-                self.info_logo.setText("LOGO")
-                self.info_logo.setStyleSheet("font-size: 16px; color: yellow; background: transparent; padding: 5px;")
-        except Exception:
-            self.info_logo.setText("LOGO")
-            self.info_logo.setStyleSheet("font-size: 16px; color: yellow; background: transparent; padding: 5px;")
- 
-        # 2-2. 타이틀
-        self.info_text = QLabel("JeongSeok Smart One-Pass")
-        self.info_text.setAlignment(Qt.AlignCenter)
-        self.info_text.setStyleSheet("font-size: 14px; color: #aaaaaa; margin-top: 5px; background: transparent;")
-        
-        info_layout.addWidget(self.info_logo)
-        info_layout.addWidget(self.info_text)
+        exit_container.setFixedWidth(BUTTON_WIDTH + BUTTON_MARGIN_SIDE)
 
-        # 최종 레이아웃에 중앙 정보 컨테이너 추가
-        # 이 위젯을 사용하는 부모 페이지에서 addStretch를 통해 수직 정렬
-        main_layout.addWidget(self.info_container)
+        # 4. 메인 수평 레이아웃에 요소 배치
+        self.main_h_layout.addWidget(balance_widget, 0) # 왼쪽 밸런스 위젯
+        self.main_h_layout.addWidget(self.center_container, 1)  # 중앙 컨테이너
+        self.main_h_layout.addWidget(exit_container, 0) # 오른쪽 X 버튼

@@ -229,3 +229,7 @@ class ProcessingPage(QWidget):
         qpixmap.setMask(mask)
 
         self.video_label.setPixmap(qpixmap)
+
+    def closeEvent(self, event):
+        self.timer.stop()
+        super().closeEvent(event)

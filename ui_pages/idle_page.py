@@ -1,8 +1,7 @@
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap
-from config import TOTAL_ATTEMPTS, MESSAGE_AREA_HEIGHT, BUTTON_STYLE 
-from PySide6.QtCore import QSize as _QSize 
+from config import TOTAL_ATTEMPTS, BUTTON_STYLE 
 
 '''
 애플리케이션의 시작/기본 화면을 표시하는 페이지
@@ -42,7 +41,7 @@ class IdlePage(QWidget):
         
         try:
             pixmap = QPixmap("resources/logo.png")
-            central_logo_label.setPixmap(pixmap.scaled(_QSize(250, 250), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            central_logo_label.setPixmap(pixmap.scaled(QSize(250, 250), Qt.KeepAspectRatio, Qt.SmoothTransformation))
         except:
             central_logo_label.setText("MAIN LOGO")
             central_logo_label.setStyleSheet("font-size: 48px; color: #007bff; font-weight: bold;")
@@ -51,7 +50,7 @@ class IdlePage(QWidget):
         
         main_layout.addStretch(1) 
         
-        # 2. 버튼 영역 (하단에 고정)
+        # 2. 버튼 영역
         button_container = QWidget()
         button_container.setStyleSheet("background: transparent;")
         button_layout = QHBoxLayout(button_container)
@@ -60,13 +59,11 @@ class IdlePage(QWidget):
         
         start_recognition_btn = QPushButton("얼굴 인식 시작")
         start_recognition_btn.setStyleSheet(BUTTON_STYLE)
-        start_recognition_btn.setMinimumSize(_QSize(180, 60))
         start_recognition_btn.clicked.connect(lambda: self.switch_callback("processing", TOTAL_ATTEMPTS))
         
         start_enrollment_btn = QPushButton("얼굴 등록")
         start_enrollment_btn.setStyleSheet(BUTTON_STYLE)
-        start_enrollment_btn.setMinimumSize(_QSize(180, 60))
-        start_enrollment_btn.clicked.connect(lambda: self.switch_callback("enrollment"))
+        start_enrollment_btn.clicked.connect(lambda: self.switch_callback("enrollment_input"))
 
         button_layout.addWidget(start_recognition_btn)
         button_layout.addWidget(start_enrollment_btn)
