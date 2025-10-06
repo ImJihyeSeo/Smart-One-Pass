@@ -9,7 +9,7 @@ class BasePage(QWidget):
         # 공통 레이아웃
         self.base_layout = QVBoxLayout(self)
         self.base_layout.setContentsMargins(0, 0, 0, 0)
-        self.base_layout.setSpacing(20)
+        self.base_layout.setSpacing(40)
 
         # 공통 헤더
         self.common_header = CommonHeader(switch_callback=switch_callback, parent=self)

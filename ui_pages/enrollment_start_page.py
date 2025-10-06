@@ -16,7 +16,7 @@ class EnrollmentStartPage(BasePage):
         # 시작 안내
         title_label = QLabel("얼굴 등록을 시작합니다")
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #ffffff; margin-bottom: 50px; background: transparent;")
+        title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #ffffff; margin-bottom: 50px; background: transparent;")
         main_layout.addWidget(title_label)
         
         # 유의사항 안내

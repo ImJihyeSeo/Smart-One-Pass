@@ -35,7 +35,7 @@ class MainWindow(QStackedWidget):
         self.addWidget(self.idle_page)
         self.setCurrentWidget(self.idle_page)
         self.setWindowTitle("얼굴 인식 기반 시스템")
-        self.setFixedSize(500, 700)
+        self.setFixedSize(500, 750)
         self.setWindowFlags(Qt.FramelessWindowHint) 
         self.setStyleSheet("""
             MainWindow {
