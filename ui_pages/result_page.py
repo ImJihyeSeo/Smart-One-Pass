@@ -4,20 +4,22 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, QSize, QByteArray, QPropertyAnimation, QAbstractAnimation
 from PySide6.QtGui import QPixmap, QPainter
 from .common_header import CommonHeader
+from .base_page import BasePage
+
 
 '''
 얼굴 인식 성공/실패 결과 + 얼굴 등록 결과 표시하는 페이지
 '''
-class ResultPage(QWidget):
+class ResultPage(BasePage):
 
     '''
     결과 데이터(success, retries)에 따라 아이콘 파일과 안내 메시지 결정
     '''
     def __init__(self, switch_callback, result_data, mode="auth"):
-        super().__init__()
-        self.switch_callback = switch_callback
+        super().__init__(switch_callback)
         self.success, current_retries = result_data
         self.mode = mode
+        self.set_header_spacing(70)
         
         # 애니메이션 객체 초기화
         self.scale_animation = None
@@ -25,14 +27,10 @@ class ResultPage(QWidget):
         
         remaining_retries = current_retries - 1 if not self.success else current_retries
         
-        self.setStyleSheet("background-color: #1a1a1a;")
+        self.setStyleSheet("background-color: transparent;")
 
-        main_layout = QVBoxLayout(self)
-        main_layout.setAlignment(Qt.AlignCenter)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.common_header = CommonHeader(switch_callback=switch_callback)
-        main_layout.addWidget(self.common_header) 
+        main_layout = self.get_content_layout()
+        main_layout.setAlignment(Qt.AlignTop)
         
         icon_size = 150
         
@@ -101,7 +99,6 @@ class ResultPage(QWidget):
         painter.end()
         self.icon_label.setPixmap(circle_pixmap)
         
-        main_layout.addStretch(1)
         main_layout.addWidget(self.icon_label)
 
         # 2. 메시지 라벨 - 메인 메시지

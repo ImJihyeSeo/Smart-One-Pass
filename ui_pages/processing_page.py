@@ -3,8 +3,8 @@ import random
 import time
 
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QGraphicsDropShadowEffect, QPushButton, QFrame
+    QWidget, QLabel, QVBoxLayout,
+    QGraphicsDropShadowEffect, QFrame
 )
 from PySide6.QtCore import Qt, QTimer, QSize
 from PySide6.QtGui import QPixmap, QImage, QPainter, QBitmap, QColor, QPen
@@ -12,19 +12,20 @@ from PySide6.QtGui import QPixmap, QImage, QPainter, QBitmap, QColor, QPen
 from config import TARGET_W, TARGET_H, MESSAGE_AREA_HEIGHT, BORDER_RADIUS 
 from cv_tools import detect_faces
 from .common_header import CommonHeader
+from .base_page import BasePage
+
 
 '''
 웹캠 화면 표시하고, 얼굴 인식 과정을 시각적으로 처리해 결과를 result_page로 넘기는 페이지
 '''
-class ProcessingPage(QWidget):
+class ProcessingPage(BasePage):
     '''
     UI 구성, QTimer 시작
     '''
     def __init__(self, switch_callback, cap, retries):
-        super().__init__()
+        super().__init__(switch_callback)
 
         # 상태 변수 초기화
-        self.switch_callback = switch_callback
         self.cap = cap
         self.retries = retries
 
@@ -33,18 +34,15 @@ class ProcessingPage(QWidget):
 
         self.TARGET_W, self.TARGET_H = TARGET_W, TARGET_H 
         self.BORDER_RADIUS = BORDER_RADIUS 
-        self.setStyleSheet("QWidget { background: transparent; }") 
+        self.setStyleSheet("QWidget { background: transparent; }")
+
+        main_layout = self.get_content_layout()
+        main_layout.setAlignment(Qt.AlignTop)
 
         # 가이드라인 투명도 애니메이션 상태변수 
         self.fade_speed = 8.0        # 투명도 변화 속도
         self.current_alpha = 255.0   # 현재 투명도 (255: 불투명)
         self.fade_direction = -1     # -1: 감소 (페이드 아웃)
-
-        main_layout = QVBoxLayout()
-        main_layout.setAlignment(Qt.AlignCenter)
-        
-        self.common_header = CommonHeader(switch_callback=switch_callback)
-        main_layout.addWidget(self.common_header) 
 
         # 비디오 영역
         self.video_label = QLabel()
