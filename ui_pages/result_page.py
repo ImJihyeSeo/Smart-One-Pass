@@ -1,10 +1,8 @@
-from PySide6.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QGraphicsOpacityEffect
-)
-from PySide6.QtCore import Qt, QTimer, QSize, QByteArray, QPropertyAnimation, QAbstractAnimation
+from PySide6.QtWidgets import QLabel
+from PySide6.QtCore import Qt, QTimer, QSize, QAbstractAnimation
 from PySide6.QtGui import QPixmap, QPainter
-from .common_header import CommonHeader
 from .base_page import BasePage
+from ui_style import blinking_effect
 
 
 '''
@@ -116,12 +114,8 @@ class ResultPage(BasePage):
             font-size: 18px; color: #ffffff; margin-top: 10px; background-color: rgba(0, 0, 0, 0); 
         """)
         
-        # 투명도 효과
-        self.opacity_effect = QGraphicsOpacityEffect(self.action_label)
-        self.action_label.setGraphicsEffect(self.opacity_effect)
-        
         main_layout.addWidget(self.action_label)
-
+        self.opacity_effect, self.fade_animation = blinking_effect(self.action_label)   # 깜박임 효과
         main_layout.addStretch(1) 
         
         # Timer to switch page after a delay
@@ -135,47 +129,12 @@ class ResultPage(BasePage):
 
         self.timer.timeout.connect(lambda: self.switch_callback(next_page, remaining_retries)) 
         self.timer.start(timeout_ms)
-        
-        # 애니메이션 시작
-        self.create_and_start_animation()
-
-
-    '''
-    메시지 라벨에 투명도 깜박임 효과 적용하는 함수
-    '''
-    def create_and_start_animation(self):
-        self.fade_animation = QPropertyAnimation(self.opacity_effect, QByteArray(b"opacity"))
-        self.fade_animation.setDuration(800) 
-        self.fade_animation.setStartValue(1.0)
-        self.fade_animation.setEndValue(0.4)
-        self.fade_animation.setLoopCount(1)
-        self.fade_animation.finished.connect(self.start_fade_backward)
-        self.fade_animation.start()
-
-
-    '''
-    투명도 애니메이션 끝날 때마다 서로 호출해 부드러운 깜박임 반복
-    '''
-    def start_fade_backward(self):
-        self.fade_animation.setStartValue(0.4)
-        self.fade_animation.setEndValue(1.0)
-        self.fade_animation.finished.disconnect()
-        self.fade_animation.finished.connect(self.start_fade_forward)
-        self.fade_animation.start()
-
-    def start_fade_forward(self):
-        self.fade_animation.setStartValue(1.0)
-        self.fade_animation.setEndValue(0.4)
-        self.fade_animation.finished.disconnect()
-        self.fade_animation.finished.connect(self.start_fade_backward)
-        self.fade_animation.start()
 
     def closeEvent(self, event):
         self.timer.stop()
         super().closeEvent(event)
         
     def next_step(self, success, remaining_retries):
-        
         if self.fade_animation and self.fade_animation.state() == QAbstractAnimation.Running:
             self.fade_animation.stop()
             

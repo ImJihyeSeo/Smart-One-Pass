@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QWidget,
     QGraphicsOpacityEffect, QGraphicsBlurEffect, QGraphicsDropShadowEffect
 ) 
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QTimer
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QTimer, QByteArray
 from PySide6.QtGui import QColor, QPainter
 
 # 메시지 영역의 고정 높이 (픽셀)
@@ -266,3 +266,24 @@ def fade_in_out(widget, duration_in=300, duration_out=500, visible_ms=2000, fini
             
         except RuntimeError:
             return
+
+
+def blinking_effect(widget: QWidget, duration: int = 2000):
+    # Opacity effect
+    effect = QGraphicsOpacityEffect(widget)
+    widget.setGraphicsEffect(effect)
+
+    # Animation 생성
+    anim = QPropertyAnimation(effect, QByteArray(b"opacity"))
+    anim.setDuration(duration)
+    anim.setStartValue(0.4)
+    anim.setEndValue(0.9)
+    anim.setEasingCurve(QEasingCurve.InOutQuad)
+    anim.setLoopCount(-1)
+    anim.setDirection(QPropertyAnimation.Forward)
+    anim.start()
+    
+    # GC 방지
+    widget._blink_anim = anim
+
+    return effect, anim
