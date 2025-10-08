@@ -8,8 +8,7 @@ from PySide6.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QBitmap
 import cv2
 import time
 
-from config import TARGET_W, TARGET_H, BORDER_RADIUS
-from ui_style import fade_in_out
+from ui_style import TARGET_W, TARGET_H, BORDER_RADIUS, fade_in_out
 from cv_tools import detect_faces
 from .base_page import BasePage
 

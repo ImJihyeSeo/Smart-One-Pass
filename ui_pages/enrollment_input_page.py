@@ -3,9 +3,8 @@ from PySide6.QtWidgets import (
     QFrame
 )
 from PySide6.QtCore import Qt
-from config import BUTTON_STYLE, INPUT_STYLE
 from .base_page import BasePage
-from ui_style import CustomAlertDialog
+from ui_style import BUTTON_STYLE, INPUT_STYLE, CustomAlertDialog
 
 
 class EnrollmentInputPage(BasePage):

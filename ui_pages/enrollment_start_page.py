@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
 from PySide6.QtCore import Qt
-from config import BUTTON_STYLE
+from ui_style import BUTTON_STYLE
 from .base_page import BasePage
 
 class EnrollmentStartPage(BasePage):

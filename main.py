@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from config import TOTAL_ATTEMPTS
+from ui_style import TOTAL_ATTEMPTS
 from ui_pages.idle_page import IdlePage
 from ui_pages.processing_page import ProcessingPage
 from ui_pages.result_page import ResultPage

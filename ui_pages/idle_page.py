@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap
-from config import TOTAL_ATTEMPTS, BUTTON_STYLE 
+from ui_style import TOTAL_ATTEMPTS, BUTTON_STYLE 
 
 '''
 애플리케이션의 시작/기본 화면을 표시하는 페이지
