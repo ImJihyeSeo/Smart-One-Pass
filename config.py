@@ -28,7 +28,7 @@ BUTTON_STYLE = """
         font-size: 16px; 
         font-weight: bold;
         min-height: 20px;
-        min-width: 180px;
+        min-width: 100px;
     }
     QPushButton:hover {
         background-color: #5F5F5F;

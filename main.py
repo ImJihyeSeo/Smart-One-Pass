@@ -12,6 +12,7 @@ from ui_pages.result_page import ResultPage
 from ui_pages.enrollment_input_page import EnrollmentInputPage
 from ui_pages.enrollment_start_page import EnrollmentStartPage
 from ui_pages.enrollment_recording_page import EnrollmentRecordingPage
+from ui_pages.reservation_page import ReservationPage
 
 ''' 
 출입 애플리케이션 메인 컨테이너
@@ -95,6 +96,11 @@ class MainWindow(QStackedWidget):
 
             self.addWidget(result_page)
             self.setCurrentWidget(result_page)
+
+        elif page_name == "reservation":
+            self.reservation_page = ReservationPage(self.switch_page) 
+            self.addWidget(self.reservation_page)
+            self.setCurrentWidget(self.reservation_page)
         
         elif page_name == "idle":
             self.retries = TOTAL_ATTEMPTS # 초기화

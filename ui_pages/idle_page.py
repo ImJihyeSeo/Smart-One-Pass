@@ -57,15 +57,20 @@ class IdlePage(QWidget):
         button_layout.setAlignment(Qt.AlignCenter)
         button_layout.setSpacing(40)
         
-        start_recognition_btn = QPushButton("얼굴 인식 시작")
+        start_recognition_btn = QPushButton("출입")
         start_recognition_btn.setStyleSheet(BUTTON_STYLE)
         start_recognition_btn.clicked.connect(lambda: self.switch_callback("processing", TOTAL_ATTEMPTS))
         
+        reserve_facility_btn = QPushButton("시설 예약")
+        reserve_facility_btn.setStyleSheet(BUTTON_STYLE)
+        reserve_facility_btn.clicked.connect(lambda: self.switch_callback("reservation"))
+
         start_enrollment_btn = QPushButton("얼굴 등록")
         start_enrollment_btn.setStyleSheet(BUTTON_STYLE)
         start_enrollment_btn.clicked.connect(lambda: self.switch_callback("enrollment_input"))
 
         button_layout.addWidget(start_recognition_btn)
+        button_layout.addWidget(reserve_facility_btn)
         button_layout.addWidget(start_enrollment_btn)
         
         main_layout.addWidget(button_container)
