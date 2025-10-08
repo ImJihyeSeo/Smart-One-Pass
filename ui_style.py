@@ -31,7 +31,7 @@ class CustomAlertDialog(QDialog):
         layout.addLayout(button_box)
 
 # 지정된 위젯에 페이드 인 → 유지 → 페이드 아웃 애니메이션 적용
-def fade_in_out(widget, duration_in=300, duration_out=500, visible_ms=2000):
+def fade_in_out(widget, duration_in=300, duration_out=500, visible_ms=2000, finished_callback=None):
     # 투명도 효과(effect) 확보 / 초기화
     try:
         effect = widget.graphicsEffect()
@@ -76,7 +76,10 @@ def fade_in_out(widget, duration_in=300, duration_out=500, visible_ms=2000):
             fade_out.setEndValue(0.0)
             fade_out.setEasingCurve(QEasingCurve.InOutQuad)
             fade_out.finished.connect(widget.hide)  # 애니메이션 완료 후 위젯 숨김
-            
+
+            if finished_callback:
+                fade_out.finished.connect(finished_callback)
+                 
             # GC 방지를 위해 애니메이션 객체를 위젯 속성에 저장
             widget._fade_out_anim = fade_out
             fade_out.start()
