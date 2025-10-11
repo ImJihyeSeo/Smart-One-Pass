@@ -280,4 +280,14 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+# InsightFace/결과물
+fr/models/
+fr/data/
+fr/outputs/
+**/__pycache__/
+*.mp4
+*.jpg
+*.png
+*.json
+
 # End of https://www.toptal.com/developers/gitignore/api/python,c++,linux,windows,macos
