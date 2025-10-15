@@ -5,7 +5,7 @@
 ```
 kiosk_gate/
 ├── main.py                		           # 메인 애플리케이션 (MainWindow)
-├── config.py               		         # 설정 상수 관리 / 스타일 정의 파일
+├── ui_style.py               		       # 설정 상수 관리 / 스타일 정의 파일
 ├── cv_tools.py             		         # 얼굴 감지/인식 관련 툴 함수
 ├── ui_pages/
 │   ├── base_page.py        	           # 공통 헤더 및 컨텐츠 영역을 제공하는 페이지
