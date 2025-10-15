@@ -12,7 +12,7 @@ from ui_pages.result_page import ResultPage
 from ui_pages.enrollment_input_page import EnrollmentInputPage
 from ui_pages.enrollment_start_page import EnrollmentStartPage
 from ui_pages.enrollment_recording_page import EnrollmentRecordingPage
-from ui_pages.reservation_page import ReservationPage
+from ui_pages.reservation_page import ReservationPage, ReturnPage, SeatMapPage
 
 ''' 
 출입 애플리케이션 메인 컨테이너
@@ -102,6 +102,18 @@ class MainWindow(QStackedWidget):
             self.addWidget(self.reservation_page)
             self.setCurrentWidget(self.reservation_page)
         
+        # 임시 반납 페이지
+        elif page_name == "return_seat":
+            self.return_page = ReturnPage(self.switch_page) 
+            self.addWidget(self.return_page)
+            self.setCurrentWidget(self.return_page)
+            
+        # 임시 열람실 배치도 페이지
+        elif page_name == "seat_map":
+            self.seat_map_page = SeatMapPage(self.switch_page, data)
+            self.addWidget(self.seat_map_page)
+            self.setCurrentWidget(self.seat_map_page)
+                
         elif page_name == "idle":
             self.retries = TOTAL_ATTEMPTS # 초기화
             self.setCurrentWidget(self.idle_page)
