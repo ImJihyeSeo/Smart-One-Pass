@@ -3,8 +3,11 @@ from PySide6.QtWidgets import (
     QGraphicsOpacityEffect, QGraphicsBlurEffect, QGraphicsDropShadowEffect,
     QCalendarWidget, QFrame
 ) 
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QTimer, QByteArray, QDate
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtCore import (
+    Qt, QPropertyAnimation, QEasingCurve, QTimer, QByteArray, QDate, 
+    Signal, QSize
+)
+from PySide6.QtGui import QColor, QPainter, QPixmap, QMouseEvent
 
 # 메시지 영역의 고정 높이 (픽셀)
 MESSAGE_AREA_HEIGHT = 100
@@ -67,6 +70,45 @@ INPUT_STYLE = """
         min-height: 25px; 
     }
 """
+
+# 메인 화면 스타일
+IDLE_PAGE_STYLE = """
+#IdlePage {
+    background-color: #1a1a1a;
+    color: #ffffff;
+    border-radius: 20px;
+}
+QLabel {
+    background: transparent;
+    color: #ffffff;
+}
+"""
+
+# 메인 화면 버튼 스타일
+class ImageButtonWidget(QLabel):
+    clicked = Signal()
+
+    def __init__(self, image_path, size, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(size)
+        self.setAlignment(Qt.AlignCenter)
+        self.setCursor(Qt.PointingHandCursor)
+
+        # 이미지 로드
+        pixmap = QPixmap(image_path)
+        if not pixmap.isNull():
+            self.setPixmap(pixmap.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            self.setText(f"{image_path} Missing")
+            self.setStyleSheet("color: red; font-size: 14px;")
+            
+        self.original_style = "QLabel { background: transparent; }"
+        self.setStyleSheet(self.original_style)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+
 
 # 팝업창 띄울 때 부모 창 위 덮는 오버레이 클래스
 class OverlayWidget(QWidget):

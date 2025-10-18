@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap
-from ui_style import TOTAL_ATTEMPTS, BUTTON_STYLE 
+from ui_style import TOTAL_ATTEMPTS, BUTTON_STYLE, IDLE_PAGE_STYLE, ImageButtonWidget
 
 '''
 애플리케이션의 시작/기본 화면을 표시하는 페이지
@@ -16,57 +16,46 @@ class IdlePage(QWidget):
         self.switch_callback = switch_callback
         
         self.setObjectName("IdlePage")
-        
-        self.setStyleSheet("""
-            #IdlePage {
-                background-color: #1a1a1a; 
-                color: #ffffff; 
-                border-radius: 20px; 
-            }
-            QLabel {
-                background: transparent;
-                color: #ffffff;
-            }
-        """)
+        self.setStyleSheet(IDLE_PAGE_STYLE)
 
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addStretch(2)
         
-        # 1. 중앙 컨텐츠 영역 (로고 이미지)
-        
+        # 도서관 로고
+        main_layout.addWidget(self.create_logo_label(
+            "resources/lib_logo.png",
+            "MAIN LOGO",
+            QSize(300, 300),
+            "font-size: 24px; color: #007bff; font-weight: bold;"
+        ))
+
+        # 타이틀 로고
+        title_label = self.create_logo_label(
+            "resources/title_logo.png",
+            "TITLE LOGO",
+            QSize(300, 100),
+            "font-size: 18px; color: #f5f5f5; font-weight: normal;"
+        )
+        title_label.setContentsMargins(0, 5, 0, 0)
+        main_layout.addWidget(title_label)
         main_layout.addStretch(1) 
         
-        central_logo_label = QLabel()
-        central_logo_label.setAlignment(Qt.AlignCenter)
-        
-        try:
-            pixmap = QPixmap("resources/logo.png")
-            central_logo_label.setPixmap(pixmap.scaled(QSize(250, 250), Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        except:
-            central_logo_label.setText("MAIN LOGO")
-            central_logo_label.setStyleSheet("font-size: 48px; color: #007bff; font-weight: bold;")
-            
-        main_layout.addWidget(central_logo_label)
-        
-        main_layout.addStretch(1) 
-        
-        # 2. 버튼 영역
+        # 버튼 영역
         button_container = QWidget()
         button_container.setStyleSheet("background: transparent;")
         button_layout = QHBoxLayout(button_container)
         button_layout.setAlignment(Qt.AlignCenter)
         button_layout.setSpacing(40)
-        
-        start_recognition_btn = QPushButton("출입")
-        start_recognition_btn.setStyleSheet(BUTTON_STYLE)
+        button_size = QSize(110, 110) 
+
+        start_recognition_btn = ImageButtonWidget("resources/entry_button.png", button_size) # 이미지 경로 지정
         start_recognition_btn.clicked.connect(lambda: self.switch_callback("processing", TOTAL_ATTEMPTS))
         
-        reserve_facility_btn = QPushButton("시설 예약")
-        reserve_facility_btn.setStyleSheet(BUTTON_STYLE)
+        reserve_facility_btn = ImageButtonWidget("resources/reservation_button.png", button_size) # 이미지 경로 지정
         reserve_facility_btn.clicked.connect(lambda: self.switch_callback("reservation"))
 
-        start_enrollment_btn = QPushButton("얼굴 등록")
-        start_enrollment_btn.setStyleSheet(BUTTON_STYLE)
+        start_enrollment_btn = ImageButtonWidget("resources/enrollment_button.png", button_size) # 이미지 경로 지정
         start_enrollment_btn.clicked.connect(lambda: self.switch_callback("enrollment_input"))
 
         button_layout.addWidget(start_recognition_btn)
@@ -75,9 +64,29 @@ class IdlePage(QWidget):
         
         main_layout.addWidget(button_container)
         
-        main_layout.addSpacing(40) 
-        
+        # copyright 로고
+        copyright_label = self.create_logo_label(
+            "resources/copyright_logo.png",
+            "COPYRIGHT LOGO",
+            QSize(100, 20),
+            "font-size: 32px; color: #f5f5f5; font-weight: normal;"
+        )
+        copyright_label.setContentsMargins(0, 60, 0, 0)
+        main_layout.addWidget(copyright_label)
+        main_layout.addSpacing(20) 
+
         self.setLayout(main_layout)
+
+    def create_logo_label(self, image_path, fallback_text, size, text_style):
+        label = QLabel()
+        label.setAlignment(Qt.AlignCenter)
+        pixmap = QPixmap(image_path)
+        if pixmap.isNull():
+            label.setText(fallback_text)
+            label.setStyleSheet(text_style)
+        else:
+            label.setPixmap(pixmap.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        return label
 
     def mousePressEvent(self, event):
         pass
