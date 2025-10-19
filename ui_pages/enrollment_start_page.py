@@ -1,6 +1,7 @@
-from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
-from PySide6.QtCore import Qt
-from ui_style import BUTTON_STYLE
+from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QPixmap, QPainter
+from ui_style import BUTTON_STYLE, TITLE_STYLE, GUIDE_STYLE
 from .base_page import BasePage
 
 class EnrollmentStartPage(BasePage):
@@ -14,44 +15,74 @@ class EnrollmentStartPage(BasePage):
         main_layout.setAlignment(Qt.AlignTop)
                 
         # 시작 안내
-        title_label = QLabel("얼굴 등록을 시작합니다")
+        title_label = QLabel("얼굴 등록을 시작합니다!")
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #ffffff; margin-bottom: 50px; background: transparent;")
+        title_label.setStyleSheet(TITLE_STYLE)
         main_layout.addWidget(title_label)
+        main_layout.addSpacing(40)
         
         # 유의사항 안내
-        guidance_box = QWidget()
+        guidance_box = QFrame()
         guidance_box.setStyleSheet("""
-            QWidget {
-                background-color: #333333; 
-                border-radius: 10px;
-                padding: 20px;
-            }
-            QLabel {
-                color: #cccccc;
-                font-size: 16px;
-                line-height: 1.5;
+            QFrame {
+                background-color: #1a1a1a;
+                border-radius: 12px;
+                padding: 10px;
             }
         """)
-        guidance_box.setFixedWidth(380)
+        guidance_box.setFixedWidth(400)
         guidance_layout = QVBoxLayout(guidance_box)
         guidance_layout.setAlignment(Qt.AlignCenter)
+        guidance_layout.setSpacing(5)
+        guidance_layout.setContentsMargins(10, 10, 10, 10)
 
         guidance_title = QLabel("촬영 시 유의사항")
-        guidance_title.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
+        guidance_title.setStyleSheet("font-size: 18px; color: white;")
         guidance_title.setAlignment(Qt.AlignCenter)
 
-        guidance_text = QLabel(
-            "1. 총 3단계의 촬영이 진행됩니다.\n"
-            "2. 각 단계는 10~15초 정도 소요됩니다.\n"
-            "3. 선글라스, 모자, 마스크는 벗어주세요.\n"
-            "4. 몸은 고정하고 고개만 움직여주세요."
+        guidance_text_1 = QLabel("정확한 인증을 위해 총 3단계의 촬영이 진행됩니다.")
+        guidance_text_2 = QLabel(
+            "각 단계는 10~15초 정도 소요됩니다.\n"
+            "선글라스, 모자, 마스크는 벗어주세요.\n"
+            "몸은 고정하고 고개만 움직여주세요."
         )
-        guidance_text.setAlignment(Qt.AlignCenter)
-        guidance_text.setWordWrap(True)
+        guidance_text_1.setAlignment(Qt.AlignCenter)
+        guidance_text_1.setStyleSheet(GUIDE_STYLE)
+        guidance_text_2.setAlignment(Qt.AlignCenter)
+        guidance_text_2.setStyleSheet(GUIDE_STYLE)
 
         guidance_layout.addWidget(guidance_title)
-        guidance_layout.addWidget(guidance_text)
+        guidance_layout.addWidget(guidance_text_1)
+        guidance_layout.addWidget(guidance_text_2)
+
+        # 금지 이미지
+        IMAGE_BASE_PATH = "resources/"
+        IMAGE_SIZE = QSize(90, 90)
+
+        prohibit_glasses = self.create_prohibit_overlay(
+            base_image_path=IMAGE_BASE_PATH + "glasses.png",
+            overlay_image_path=IMAGE_BASE_PATH + "prohibit.png",
+            size=IMAGE_SIZE
+        ) 
+        prohibit_hat = self.create_prohibit_overlay(
+            base_image_path=IMAGE_BASE_PATH + "hat.png",
+            overlay_image_path=IMAGE_BASE_PATH + "prohibit.png",
+            size=IMAGE_SIZE
+        )
+        prohibit_mask = self.create_prohibit_overlay(
+            base_image_path=IMAGE_BASE_PATH + "mask.png",
+            overlay_image_path=IMAGE_BASE_PATH + "prohibit.png",
+            size=IMAGE_SIZE
+        )
+
+        image_hbox = QHBoxLayout()
+        image_hbox.setSpacing(0)
+        image_hbox.setContentsMargins(0, 0, 0, 0)
+        image_hbox.addWidget(prohibit_glasses)
+        image_hbox.addWidget(prohibit_hat)
+        image_hbox.addWidget(prohibit_mask)
+        
+        guidance_layout.addLayout(image_hbox)
 
         # guidance_box 가운데 정렬
         guidance_container = QHBoxLayout()
@@ -60,7 +91,7 @@ class EnrollmentStartPage(BasePage):
         guidance_container.addStretch(1)
 
         main_layout.addLayout(guidance_container)
-        main_layout.addStretch(1)
+        main_layout.addSpacing(40)
 
         # 버튼
         start_btn = QPushButton("촬영 시작하기")
@@ -75,3 +106,57 @@ class EnrollmentStartPage(BasePage):
 
         # enrollment_recording 페이지로 이동
         start_btn.clicked.connect(lambda: self.switch_callback("enrollment_recording", self.user_data))
+    
+    
+    def create_prohibit_overlay(self, base_image_path, overlay_image_path, size=QSize(80, 80)):
+        """
+        기본 이미지 위에 금지 아이콘 덧씌운 QLabel 생성
+        """
+        try:
+            base_pixmap = QPixmap(base_image_path)
+            overlay_pixmap = QPixmap(overlay_image_path)
+
+            if base_pixmap.isNull() or overlay_pixmap.isNull():
+                print(f"[create_prohibit_overlay] Error: missing {base_image_path} or {overlay_image_path}")
+                placeholder = QLabel("?")
+                placeholder.setStyleSheet("font-size: 40px; color: red;")
+                placeholder.setAlignment(Qt.AlignCenter)
+                placeholder.setFixedSize(size)
+                return placeholder
+
+            # 스케일링 – 비율 유지하면서 target size 안에 맞춤
+            scaled_base = base_pixmap.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            scaled_overlay = overlay_pixmap.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+            # 최종 픽스맵
+            target = QPixmap(size)
+            target.fill(Qt.transparent)
+
+            # 중앙 정렬 위치 계산
+            bx = (size.width() - scaled_base.width()) // 2
+            by = (size.height() - scaled_base.height()) // 2
+            ox = (size.width() - scaled_overlay.width()) // 2
+            oy = (size.height() - scaled_overlay.height()) // 2
+
+            # 합성
+            painter = QPainter(target)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.drawPixmap(bx, by, scaled_base)
+            painter.drawPixmap(ox, oy, scaled_overlay)
+            painter.end()
+
+            # QLabel 설정
+            label = QLabel()
+            label.setPixmap(target)
+            label.setScaledContents(True)  # 픽스맵 전체를 라벨 크기에 맞게 표시
+            label.setFixedSize(size)
+            label.setAlignment(Qt.AlignCenter)
+            return label
+
+        except Exception as e:
+            print(f"[create_prohibit_overlay] error: {e}")
+            placeholder = QLabel("?")
+            placeholder.setStyleSheet("font-size: 40px; color: gray;")
+            placeholder.setAlignment(Qt.AlignCenter)
+            placeholder.setFixedSize(size)
+            return placeholder

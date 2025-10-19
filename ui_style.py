@@ -30,10 +30,10 @@ PROCESSING_DURATION = 3.0
 # 버튼
 BUTTON_STYLE = """
     QPushButton {
-        background-color: #005BAC; 
+        background-color: #3B6EEB;
         color: white; 
-        border-radius: 8px; 
-        padding: 8px 5px; 
+        border-radius: 20px;
+        padding: 12px 25px;
         font-size: 16px; 
         font-weight: bold;
         min-height: 20px;
@@ -58,16 +58,25 @@ ICON_BUTTON_STYLE = """
     }
 """
 
+# 기본 라벨 스타일
+LABEL_STYLE = "color: #ffffff; font-size: 14px; margin: 0px; padding: 8px;"
+# 메인 안내 메시지
+TITLE_STYLE = "font-size: 24px; color: #ffffff; margin-bottom: 5px;"
+# 서브 안내 메시지
+GUIDE_STYLE = "font-size: 14px; color: #ffffff;"
+
 # 입력 필드 스타일
 INPUT_STYLE = """
     QLineEdit {
-        background-color: rgba(255, 255, 255, 0.4);
-        color: #ffffff; 
-        border: 2px solid #ffffff; 
-        border-radius: 20px; 
-        padding: 6px 12px; 
-        font-size: 15px; 
-        min-height: 25px; 
+        background-color: #333333;
+        color: #ffffff;
+        border: none;
+        border-radius: 18px;
+        padding: 10px;
+        font-size: 12px;
+    }
+    QLineEdit:focus {
+        border: 1px solid #4A90E2;
     }
 """
 
