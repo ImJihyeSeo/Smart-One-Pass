@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, QDate, QRectF
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor
 
 from .base_page import BasePage
-from ui_style import BUTTON_STYLE, ICON_BUTTON_STYLE, DateSelectionDialog, CustomAlertDialog
+from ui_style import BUTTON_STYLE, ICON_BUTTON_STYLE, CustomAlertDialog
 
 class CircleProgressWidget(QFrame):
     """ 좌석 현황을 원형 도넛 차트로 표시하고 텍스트 포함하는 커스텀 위젯 """
@@ -254,20 +254,6 @@ class ReservationPage(BasePage):
 
     def _go_to_seat_map(self, room_name):
         self.switch_callback("seat_map", room_name)
-
-# 임시 반납 페이지
-class ReturnPage(QWidget):
-    def __init__(self, switch_callback):
-        super().__init__()
-        self.setStyleSheet("background-color: #1a1a1a; color: #ffffff;")
-        layout = QVBoxLayout(self)
-        label = QLabel("좌석 반납 페이지 (구현 예정)")
-        label.setStyleSheet("color: #ffffff; font-size: 24px;")
-        layout.addWidget(label, alignment=Qt.AlignCenter)
-        back_btn = QPushButton("메인으로")
-        back_btn.setStyleSheet(BUTTON_STYLE)
-        back_btn.clicked.connect(lambda: switch_callback("reservation"))
-        layout.addWidget(back_btn, alignment=Qt.AlignCenter)
 
 # 임시 열람실 배치도 페이지
 class SeatMapPage(QWidget):

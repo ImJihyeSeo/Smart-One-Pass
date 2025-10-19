@@ -3,16 +3,18 @@ import cv2
 from PySide6.QtWidgets import (
     QApplication, QStackedWidget
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 
-from ui_style import TOTAL_ATTEMPTS
+from ui_style import TOTAL_ATTEMPTS, CustomAlertDialog
 from ui_pages.idle_page import IdlePage
 from ui_pages.processing_page import ProcessingPage
 from ui_pages.result_page import ResultPage
 from ui_pages.enrollment_input_page import EnrollmentInputPage
 from ui_pages.enrollment_start_page import EnrollmentStartPage
 from ui_pages.enrollment_recording_page import EnrollmentRecordingPage
-from ui_pages.reservation_page import ReservationPage, ReturnPage, SeatMapPage
+from ui_pages.reservation_page import ReservationPage, SeatMapPage
+from ui_pages.return_page import ReturnSeatPage
+
 
 ''' 
 출입 애플리케이션 메인 컨테이너
@@ -55,7 +57,7 @@ class MainWindow(QStackedWidget):
     idle_page 복귀 시 남은 시도 횟수 초기화
     processing_page/result_page 동적 생성 및 제거
     '''
-    def switch_page(self, page_name, data=None, mode=None):
+    def switch_page(self, page_name, data=None, mode=None, popup_msg=None):
         
         # 현재 남은 시도 횟수 업데이트
         if isinstance(data, int):
@@ -102,9 +104,9 @@ class MainWindow(QStackedWidget):
             self.addWidget(self.reservation_page)
             self.setCurrentWidget(self.reservation_page)
         
-        # 임시 반납 페이지
+        # 반납 페이지
         elif page_name == "return_seat":
-            self.return_page = ReturnPage(self.switch_page) 
+            self.return_page = ReturnSeatPage(self.switch_page) 
             self.addWidget(self.return_page)
             self.setCurrentWidget(self.return_page)
             
@@ -117,7 +119,14 @@ class MainWindow(QStackedWidget):
         elif page_name == "idle":
             self.retries = TOTAL_ATTEMPTS # 초기화
             self.setCurrentWidget(self.idle_page)
+        
+        if popup_msg:
+            QTimer.singleShot(100, lambda: self._show_transient_popup(popup_msg))
 
+    def _show_transient_popup(self, msg):
+        dialog = CustomAlertDialog(msg, self) 
+        dialog.exec()
+        QTimer.singleShot(2000, dialog.accept)
 
     '''
     메인 창 종료 시 웹캠 리소스 해제
