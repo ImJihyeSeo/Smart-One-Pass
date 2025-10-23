@@ -1,5 +1,4 @@
 import cv2
-import random
 import time
 
 from PySide6.QtWidgets import (
@@ -14,6 +13,8 @@ from ui_style import TARGET_W, TARGET_H, MESSAGE_AREA_HEIGHT, BORDER_RADIUS
 from cv_tools import detect_faces
 from .base_page import BasePage
 
+from faceid.face_recognizer import FaceRecognizer
+
 
 '''
 웹캠 화면 표시하고, 얼굴 인식 과정을 시각적으로 처리해 결과를 result_page로 넘기는 페이지
@@ -22,12 +23,13 @@ class ProcessingPage(BasePage):
     '''
     UI 구성, QTimer 시작
     '''
-    def __init__(self, switch_callback, cap, retries):
+    def __init__(self, switch_callback, cap, retries, face_rec: FaceRecognizer): 
         super().__init__(switch_callback)
 
         # 상태 변수 초기화
         self.cap = cap
         self.retries = retries
+        self.face_rec = face_rec  # AI 모델 인스턴스
 
         self.start_time = None
         self.duration = 3.0
@@ -50,7 +52,7 @@ class ProcessingPage(BasePage):
             }}
         """)
 
-        # 가이드라인 이미지 위젯으로 변경
+        # 가이드라인
         GUIDE_IMAGE_SIZE = 130
 
         self.guide_image_label = QLabel(self.video_label) # video_label을 부모로 설정
@@ -74,27 +76,20 @@ class ProcessingPage(BasePage):
         self.guide_opacity_effect = QGraphicsOpacityEffect(self.guide_image_label)
         self.guide_image_label.setGraphicsEffect(self.guide_opacity_effect)
 
-        # 가이드라인 이미지 깜박임 방향 전환 
+        # 가이드라인 애니메이션
         anim1 = QPropertyAnimation(self.guide_opacity_effect, b"opacity")
-        anim1.setDuration(1200)
-        anim1.setStartValue(0.8)
-        anim1.setEndValue(0.2)
-        anim1.setEasingCurve(QEasingCurve.InOutQuad)
-
+        anim1.setDuration(1200); anim1.setStartValue(0.8); anim1.setEndValue(0.2); anim1.setEasingCurve(QEasingCurve.InOutQuad)
         anim2 = QPropertyAnimation(self.guide_opacity_effect, b"opacity")
-        anim2.setDuration(1200)
-        anim2.setStartValue(0.2)
-        anim2.setEndValue(0.8)
-        anim2.setEasingCurve(QEasingCurve.InOutQuad)
+        anim2.setDuration(1200); anim2.setStartValue(0.2); anim2.setEndValue(0.8); anim2.setEasingCurve(QEasingCurve.InOutQuad)
 
         self.guide_animation = QSequentialAnimationGroup()
         self.guide_animation.setParent(self)
         self.guide_animation.addAnimation(anim1)
         self.guide_animation.addAnimation(anim2)
-        self.guide_animation.setLoopCount(-1)  # 무한 반복
+        self.guide_animation.setLoopCount(-1)
 
-        # 반투명 오버레이 프레임 씌우기
-        self.overlay_frame = QFrame(self.video_label) # video_label을 부모로 설정하여 겹침
+        # 반투명 오버레이 프레임
+        self.overlay_frame = QFrame(self.video_label) 
         self.overlay_frame.setFixedSize(self.TARGET_W, self.TARGET_H)
         self.overlay_frame.setStyleSheet(f"""
             QFrame {{
@@ -128,6 +123,7 @@ class ProcessingPage(BasePage):
         main_layout.addWidget(self.video_label, 0, Qt.AlignCenter)
         main_layout.addStretch(1)
         main_layout.addWidget(self.message_container)
+        main_layout.addStretch(1)
         main_layout.setContentsMargins(0, 0, 0, 0) 
 
         self.setLayout(main_layout)
@@ -136,14 +132,6 @@ class ProcessingPage(BasePage):
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
 
-
-    '''
-    웹캠 메인 루프. QTimer에 의해 30ms마다 호출
-    1. 웹캠 프레임 로드 및 크롭
-    2. L자 가이드라인 그리고 얼굴 감지
-    3. 가이드라인 투명도 계산 및 업데이트
-    4. 얼굴 감지 성공 시 타이머 시작 및 result_page로 전환
-    '''
     def update_frame(self):
         if not self.cap.isOpened():
             self.instruction.setText("카메라 연결 실패")
@@ -155,6 +143,7 @@ class ProcessingPage(BasePage):
             return
         
         # 웹캠 화면 크롭 로직
+        frame = cv2.flip(frame, 1) # 좌우 반전
         h, w, _ = frame.shape
         target_h, target_w = self.TARGET_H, self.TARGET_W
         
@@ -165,27 +154,33 @@ class ProcessingPage(BasePage):
             start_x = (w - target_w) // 2
             frame = frame[:, start_x:start_x + target_w]
 
-        # 가이드라인 좌표 계산
+        # --------------------------
+        # AI 모델 / 감지 로직
+        # --------------------------
+        # 가이드 영역
         guide_width = int(target_w * 0.5)
         guide_x1 = (target_w - guide_width) // 2
         guide_y1 = (target_h - guide_width) // 2
         guide_x2 = guide_x1 + guide_width
         guide_y2 = guide_y1 + guide_width
-        guide = [guide_x1, guide_y1, guide_x2, guide_y2]
+        
+        # 얼굴 감지 / 임베딩 추출
+        emb, face_obj = self.face_rec.embed_biggest(frame)
 
-        # 얼굴 감지 로직
-        faces = detect_faces(frame)
+        # 가이드라인 영역에 얼굴 중심 있는지 확인하는 로직으로 UI 상태만 제어
+        faces_legacy = detect_faces(frame)
         face_in_guide = False
-        for (x, y, fw, fh) in faces:
+        for (x, y, fw, fh) in faces_legacy:
             cx, cy = x + fw // 2, y + fh // 2
-            if guide[0] < cx < guide[2] and guide[1] < cy < guide[3]:
+            if guide_x1 < cx < guide_x2 and guide_y1 < cy < guide_y2:
                 face_in_guide = True
                 break
-
-        # 투명도/상태 제어 로직
-        if face_in_guide:
-
-            # 얼굴 인식 중 (깜박임 활성화 / 오버레이 밝게)
+        
+        # --------------------------
+        # UI 상태 제어
+        # --------------------------
+        if face_in_guide and emb is not None: # 얼굴이 UI 가이드라인 내 + AI가 임베딩을 추출
+            # 얼굴 인식 중
             if self.start_time is None:
                 self.start_time = time.time()
                 self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(0, 0, 0, 40); border-radius: {self.BORDER_RADIUS}px; }}")
@@ -195,27 +190,22 @@ class ProcessingPage(BasePage):
                 
             self.instruction.setText(f"얼굴을 인식 중입니다. 잠시만 기다려주세요.")
 
-            '''
-            인식 성공 로직 => random.choice를 AI 모델로 대체해야
-            현재는 얼굴이 가이드라인 내에 있는지 기준으로 70%확률로 랜덤 성공하도록 설계함
-            '''
             elapsed = time.time() - self.start_time
             if elapsed >= self.duration:
                 self.timer.stop()
+                self.guide_animation.stop()
 
-                # =============================
-                # AI 모델 연동 및 인식 시도 부분
-                # =============================
-
-                success = random.choice([True, False])
-                self.switch_callback("result", (success, self.retries)) 
+                # 얼굴 식별 - AI 모델
+                success, name, similarity = self.face_rec.identify_face(emb)
+                
+                # result_page로 결과 데이터 전달
+                result_data = (success, self.retries, name) 
+                self.switch_callback("result", result_data) 
         else:
-
+            # 얼굴 미감지 시
             if self.guide_animation.state() == QAbstractAnimation.Running:
                 self.guide_animation.stop()
-            self.guide_opacity_effect.setOpacity(1.0) # 완전히 불투명
-
-            # 얼굴 미감지 시 (깜박임 정지 / 오버레이 어둡게)
+            self.guide_opacity_effect.setOpacity(1.0) 
             self.start_time = None
             self.instruction.setText("얼굴 인식을 시작하려면 화면을 바라봐주세요.")
             self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(0, 0, 0, 80); border-radius: {self.BORDER_RADIUS}px; }}")

@@ -15,6 +15,8 @@ from ui_pages.enrollment_recording_page import EnrollmentRecordingPage
 from ui_pages.reservation_page import ReservationPage, SeatMapPage
 from ui_pages.return_page import ReturnSeatPage
 
+from faceid.face_recognizer import FaceRecognizer
+
 
 ''' 
 출입 애플리케이션 메인 컨테이너
@@ -33,6 +35,8 @@ class MainWindow(QStackedWidget):
         self.cap = cv2.VideoCapture(0)
         if not self.cap.isOpened():
             print("경고: 웹캠을 열 수 없습니다.")
+
+        self.face_rec = FaceRecognizer()    # AI 모델 인스턴스
 
         self.idle_page = IdlePage(self.switch_page)
         self.addWidget(self.idle_page)
@@ -81,12 +85,14 @@ class MainWindow(QStackedWidget):
             self.setCurrentWidget(self.enrollment_start_page)
             
         elif page_name == "enrollment_recording":
-            self.enrollment_recording_page = EnrollmentRecordingPage(self.switch_page, data, self.cap)
+            # self.face_rec 전달
+            self.enrollment_recording_page = EnrollmentRecordingPage(self.switch_page, data, self.cap, self.face_rec)
             self.addWidget(self.enrollment_recording_page)
             self.setCurrentWidget(self.enrollment_recording_page)
         
         elif page_name == "processing":
-            self.processing_page = ProcessingPage(self.switch_page, self.cap, self.retries) 
+            # self.face_rec 전달
+            self.processing_page = ProcessingPage(self.switch_page, self.cap, self.retries, self.face_rec) 
             self.addWidget(self.processing_page)
             self.setCurrentWidget(self.processing_page)
         
