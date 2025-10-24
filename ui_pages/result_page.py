@@ -52,6 +52,24 @@ class ResultPage(BasePage):
             sub_message = "메인 화면으로 자동 전환됩니다"
             timeout_ms = 5000
 
+        elif self.mode == "return":
+            # 반납 모드
+            icon_file = "resources/check.png"
+            main_message = "좌석 반납이\n완료되었습니다!"
+            sub_message = "메인 화면으로 자동 전환됩니다."
+            self.success = True
+            remaining_retries = 0
+            timeout_ms = 3000
+
+        elif self.mode == "extend":
+            # 연장 모드
+            icon_file = "resources/check.png"
+            main_message = "좌석 연장이\n완료되었습니다!" 
+            sub_message = "메인 화면으로 자동 전환됩니다."
+            self.success = True
+            remaining_retries = 0
+            timeout_ms = 3000
+
         self.setStyleSheet("background-color: transparent;")
 
         main_layout = self.get_content_layout()

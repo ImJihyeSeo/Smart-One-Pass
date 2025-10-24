@@ -5,32 +5,29 @@ from PySide6.QtCore import Qt
 from .base_page import BasePage
 from ui_style import BUTTON_STYLE, CANCEL_BUTTON_STYLE
 
-class ReturnSeatPage(BasePage):
-    """좌석 반납 페이지"""
+class ExtendSeatPage(BasePage):
+    """좌석 연장 페이지"""
 
     def __init__(self, switch_callback):
         super().__init__(switch_callback)
-        self.setObjectName("ReturnSeatPage")
+        self.setObjectName("ExtendSeatPage")
 
         # 좌석 정보 (DB 연동 필요)
         self.seat_data = {
             "seat_room": "2-1",
-            "seat_number": "148",
-            "assigned_time_start": "1:00",
-            "assigned_time_end": "7:00",
-            "remaining_time_min": 300,
-            "total_time_min": 360,
-            "extend_time": "6:00"
+            "seat_number": "53",
+            "assigned_time_start": "1:00",  # 배정 시작
+            "assigned_time_end": "7:00",    # 배정 종료
+            "extend_duration": "3", # 연장 시간
+            "new_end_time": "10:00" # 연장 후 종료 시간
         }
-
-        # 색상 상수
+        
         CARD_BG = "#181818"
         BLUE = "#2e6cff"
         WHITE = "#ffffff"
-
-        # 기본 스타일
+        
         self.setStyleSheet(f"""
-            #ReturnSeatPage {{
+            #ExtendSeatPage {{
                 background-color: #1a1a1a;
                 color: {WHITE};
             }}
@@ -48,7 +45,7 @@ class ReturnSeatPage(BasePage):
         main_layout.addSpacing(40)
 
         # 질문 문구
-        question_label = QLabel("좌석을 반납하시겠습니까?")
+        question_label = QLabel("좌석을 연장하시겠습니까?")
         question_label.setAlignment(Qt.AlignCenter)
         question_label.setObjectName("QuestionText")
         main_layout.addWidget(question_label)
@@ -79,7 +76,7 @@ class ReturnSeatPage(BasePage):
         key_layout.setContentsMargins(0, 0, 0, 0)
         key_layout.setSpacing(22)
 
-        for text in ["좌석", "배정일시", "잔여시간", "연장가능시간"]:
+        for text in ["좌석", "배정일시", "연장시간", "종료시간"]: 
             lbl = QLabel(text)
             lbl.setStyleSheet(f"font-size: 16px; color: {WHITE}; font-weight: 800;")
             key_layout.addWidget(lbl, alignment=Qt.AlignLeft)
@@ -99,22 +96,21 @@ class ReturnSeatPage(BasePage):
             f'<span style="font-size:16px; color:{WHITE};">'
             f'제{self.seat_data["seat_room"]}열람실 {self.seat_data["seat_number"]}번'
             f'</span>',
-            
+
             # 배정일시
             f'<span style="font-size:16px; color:{WHITE};">'
             f'오후 {self.seat_data["assigned_time_start"]} ~ 오후 {self.seat_data["assigned_time_end"]}'
             f'</span>',
             
-            # 잔여시간
-            f'<span style="font-size:16px;">'
-            f'<span style="color:{BLUE}; font-weight:bold;">{self.seat_data["remaining_time_min"]}</span>' # 파란색
-            f'<span style="color:{WHITE};"> / {self.seat_data["total_time_min"]}</span>'
-            f'<span style="color:{WHITE};"> (분)</span>' 
-            f'</span>',
+            # 연장시간
+            f'<span style="font-size:16px; color:{BLUE}; font-weight:bold;">'
+            f'{self.seat_data["extend_duration"]}'  # 파란색
+            f'</span>'
+            f'<span style="font-size:16px; color:{WHITE};">시간</span>',
             
-            # 연장가능시간
+            # 종료시간
             f'<span style="font-size:16px; color:{WHITE};">'
-            f'오후 {self.seat_data["extend_time"]}'
+            f'오후 {self.seat_data["new_end_time"]}'
             f'</span>'
         ]
 
@@ -129,12 +125,12 @@ class ReturnSeatPage(BasePage):
         card_h_layout.addWidget(line_frame)
         card_h_layout.addLayout(value_layout)
 
-        # 반납 버튼
-        return_btn = QPushButton("반납")
-        return_btn.setFixedSize(120, 45)
-        return_btn.setStyleSheet(BUTTON_STYLE)
-        return_btn.clicked.connect(self._handle_return)
-        
+        # 연장 버튼
+        extend_btn = QPushButton("연장")
+        extend_btn.setFixedSize(120, 45)
+        extend_btn.setStyleSheet(BUTTON_STYLE)
+        extend_btn.clicked.connect(self._handle_extend)
+
         # 취소 버튼
         cancel_btn = QPushButton("취소")
         cancel_btn.setFixedSize(120, 45)
@@ -143,15 +139,15 @@ class ReturnSeatPage(BasePage):
 
         # 버튼 그룹 레이아웃
         btn_h_layout = QHBoxLayout()
-        btn_h_layout.addWidget(return_btn)
+        btn_h_layout.addWidget(extend_btn)
         btn_h_layout.addWidget(cancel_btn)
-        btn_h_layout.setAlignment(Qt.AlignHCenter)
-        
+        btn_h_layout.setAlignment(Qt.AlignCenter)
+
         main_layout.addSpacing(30)
         main_layout.addLayout(btn_h_layout)
         main_layout.addStretch(1)
 
 
-    def _handle_return(self):
-        """좌석 반납 처리 (DB 연동 필요)"""
-        self.switch_callback("result", mode="return")
+    def _handle_extend(self):
+        """좌석 연장 처리 (DB 연동 필요)"""
+        self.switch_callback("result", mode="extend")

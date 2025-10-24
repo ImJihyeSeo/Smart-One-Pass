@@ -14,6 +14,7 @@ from ui_pages.enrollment_start_page import EnrollmentStartPage
 from ui_pages.enrollment_recording_page import EnrollmentRecordingPage
 from ui_pages.reservation_page import ReservationPage, SeatMapPage
 from ui_pages.return_page import ReturnSeatPage
+from ui_pages.extend_page import ExtendSeatPage
 
 from faceid.face_recognizer import FaceRecognizer
 
@@ -97,8 +98,8 @@ class MainWindow(QStackedWidget):
             self.setCurrentWidget(self.processing_page)
         
         elif page_name == "result":
-            if mode == "enroll":
-                result_page = ResultPage(self.switch_page, data, mode="enroll")
+            if mode:
+                result_page = ResultPage(self.switch_page, data, mode=mode)
             else:
                 result_page = ResultPage(self.switch_page, data)
 
@@ -115,7 +116,13 @@ class MainWindow(QStackedWidget):
             self.return_page = ReturnSeatPage(self.switch_page) 
             self.addWidget(self.return_page)
             self.setCurrentWidget(self.return_page)
-            
+
+        # 연장 페이지
+        elif page_name == "extend_seat":
+            self.extend_page = ExtendSeatPage(self.switch_page)   
+            self.addWidget(self.extend_page)
+            self.setCurrentWidget(self.extend_page)
+        
         # 임시 열람실 배치도 페이지
         elif page_name == "seat_map":
             self.seat_map_page = SeatMapPage(self.switch_page, data)

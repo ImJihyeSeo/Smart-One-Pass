@@ -145,7 +145,7 @@ class ReservationPage(BasePage):
         
         icon_layout.addWidget(self._create_icon_button("좌석확인", "simple_check.png", self._show_popup, "좌석 확인"))
         icon_layout.addWidget(self._create_icon_button("좌석반납", "return.png", self._go_to_return_page, None))
-        icon_layout.addWidget(self._create_icon_button("좌석연장", "more_time.png", self._show_popup, "좌석 연장"))
+        icon_layout.addWidget(self._create_icon_button("좌석연장", "more_time.png", self._go_to_extend_page, None))        
         icon_layout.addWidget(self._create_icon_button("Info", "info.png", self._show_popup, "안내사항"))
         
         layout.addLayout(icon_layout)
@@ -251,6 +251,9 @@ class ReservationPage(BasePage):
 
     def _go_to_return_page(self):
         self.switch_callback("return_seat")
+
+    def _go_to_extend_page(self):
+        self.switch_callback("extend_seat")
 
     def _go_to_seat_map(self, room_name):
         self.switch_callback("seat_map", room_name)

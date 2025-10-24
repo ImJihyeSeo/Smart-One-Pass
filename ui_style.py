@@ -37,10 +37,27 @@ BUTTON_STYLE = """
         font-size: 16px; 
         font-weight: bold;
         min-height: 20px;
-        min-width: 100px;
+        min-width: 60px;
     }
     QPushButton:hover {
-        background-color: #5F5F5F;
+        background-color: #5A83F2;
+    }
+"""
+
+# 취소 버튼
+CANCEL_BUTTON_STYLE = """
+    QPushButton {
+        background-color: #7f7f7f;
+        color: white; 
+        border-radius: 20px;
+        padding: 12px 25px;
+        font-size: 16px; 
+        font-weight: bold;
+        min-height: 20px;
+        min-width: 60px;
+    }
+    QPushButton:hover {
+        background-color: #9f9f9f;
     }
 """
 
