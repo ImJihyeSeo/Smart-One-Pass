@@ -137,13 +137,27 @@ class ReservationPage(BasePage):
         self._setup_status_cards(main_layout)
         main_layout.addSpacing(40)
 
+    def _get_user_reservation_data(self):
+        """ DB 연동 필요 """
+        # 예약 없는 경우
+        # return None 
+        
+        # 임시 데이터
+        return {
+            "room": "제1열람실",
+            "seat_id": 142,
+            "start_time": "11:00",
+            "end_time": "17:00",
+            "extend_count": 0
+        }
+    
     def _setup_action_buttons(self, layout):
         # 좌석 확인, 반납, 연장, Info 버튼 그룹
         icon_layout = QHBoxLayout()
         icon_layout.setAlignment(Qt.AlignCenter)
         icon_layout.setSpacing(0)
         
-        icon_layout.addWidget(self._create_icon_button("좌석확인", "simple_check.png", self._show_popup, "좌석 확인"))
+        icon_layout.addWidget(self._create_icon_button("좌석확인", "simple_check.png", self._show_popup, "좌석확인"))
         icon_layout.addWidget(self._create_icon_button("좌석반납", "return.png", self._go_to_return_page, None))
         icon_layout.addWidget(self._create_icon_button("좌석연장", "more_time.png", self._go_to_extend_page, None))        
         icon_layout.addWidget(self._create_icon_button("Info", "info.png", self._show_popup, "안내사항"))
@@ -227,26 +241,48 @@ class ReservationPage(BasePage):
 
     
     def _show_popup(self, title):
-        
+        dialog_buttons = None
+        info_message = {}
+        dialog_width = None
+        current_reservation = self._get_user_reservation_data() # 예약 정보 가져오기
+
         if title == "안내사항":
+            dialog_width = 400
             info_message = {
                 "title": "이용 완료 시 좌석 반납 필수",
-                "body": "기본 이용 시간: 6시간\n"
-                        "좌석 연장: 이용 종료 1시간 전부터 연장 가능, 3회 가능\n"
-                        "30일간 좌석 미반납 3회시 5일 일반열람실 이용불가",
+                "body": "기본 이용 시간: 6시간<br>" 
+                        "좌석 연장: 이용 종료 1시간 전부터 연장 가능, 3회 가능<br>"
+                        "30일간 좌석 미반납 3회시 5일 일반열람실 이용 불가",
                 "footer": "문의: 032-860-9032"
             }
+            dialog_buttons = [{'text': '닫기', 'style': 'cancel', 'callback': None}]
+            
+        elif title == "좌석확인":
+            if current_reservation:
+                res = current_reservation
+                styled_seat = f'<span style="color:#3B6EEB;">{res["seat_id"]}번</span>'
+                body_content = (f"{res['room']} {styled_seat}")
+                info_message = {"title": "좌석확인", "body": body_content, "footer": ""}
+            else:
+                info_message = {
+                    "title": "좌석확인",
+                    "body": "예약된 좌석이 없습니다.",
+                    "footer": "좌석 배정 후 이용해 주세요."
+                }
+            dialog_buttons = [{'text': '닫기', 'style': 'cancel', 'callback': None}]
+        
         else:
             info_message = {
-                "title": title, # 제목은 "좌석 확인", "좌석 연장"으로 사용
-                "body": {
-                    "좌석 확인": "배정된 좌석 정보 표시(DB 연동 필요)",
-                    "좌석 연장": "좌석 연장 가능 여부 확인 및 처리(DB 연동 필요)"
-                }.get(title, "팝업 기능 임시 구현"),
+                "title": title,
+                "body": "팝업 내용이 정의되지 않았습니다.",
                 "footer": ""
             }
+            dialog_buttons = [{'text': '확인', 'style': 'confirm', 'callback': None}]
 
-        dialog = CustomAlertDialog(info_message, self) # CustomAlertDialog에 딕셔너리 전달
+        if not isinstance(info_message.get("body"), str):
+            info_message["body"] = str(info_message.get("body"))
+
+        dialog = CustomAlertDialog(info_message, self, buttons=dialog_buttons, width=dialog_width) 
         dialog.exec()
 
     def _go_to_return_page(self):
@@ -265,9 +301,9 @@ class SeatMapPage(QWidget):
         self.setStyleSheet("background-color: #1a1a1a; color: #ffffff;")
         layout = QVBoxLayout(self)
         label = QLabel(f"'{room_name}' 배치도 페이지 (구현예정)")
-        label.setStyleSheet("color: #007bff; font-size: 24px;")
+        label.setStyleSheet("color: #ffffff; font-size: 24px; background: transparent;")
         layout.addWidget(label, alignment=Qt.AlignCenter)
-        back_btn = QPushButton("메인으로")
+        back_btn = QPushButton("예약 페이지로")
         back_btn.setStyleSheet(BUTTON_STYLE)
         back_btn.clicked.connect(lambda: switch_callback("reservation"))
         layout.addWidget(back_btn, alignment=Qt.AlignCenter)

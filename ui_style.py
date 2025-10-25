@@ -40,7 +40,7 @@ BUTTON_STYLE = """
         min-width: 60px;
     }
     QPushButton:hover {
-        background-color: #5A83F2;
+        background-color: #4A79F0;
     }
 """
 
@@ -180,11 +180,17 @@ class OverlayWidget(QWidget):
         self._align_to_parent()
         super().showEvent(event)
 
+
 # 경고 팝업창
 class CustomAlertDialog(QDialog):
-    def __init__(self, message, parent=None):
+    def __init__(self, message, parent=None, buttons=None, width=None):
         super().__init__(parent)
         self.overlay = None
+        
+        # 기본 버튼 - 확인
+        if buttons is None:
+            buttons = [{'text': '확인', 'style': 'confirm', 'callback': self.accept}]
+        self.button_configs = buttons
 
         # 오버레이 생성
         if parent:
@@ -206,12 +212,15 @@ class CustomAlertDialog(QDialog):
         # 메인 위젯
         self.bg_widget = QLabel()
         self.bg_widget.setObjectName("glass")
-        self.bg_widget.setFixedWidth(400)
+        
+        # 너비: width 값 지정 -> 사용 / 미지정 -> 기본값 200px
+        final_width = width if width is not None else 200 
+        self.bg_widget.setFixedWidth(final_width) 
+        
         self.bg_widget.setStyleSheet("""
             QLabel#glass {
                 background-color: rgba(255, 255, 255, 0.15);    /* 유리 같은 반투명 효과 */
                 border-radius: 25px;
-                border: 1px solid rgba(255,255,255,0.3);
             }
         """)
         blur = QGraphicsBlurEffect()
@@ -228,10 +237,9 @@ class CustomAlertDialog(QDialog):
         # 내부 레이아웃
         inner_layout = QVBoxLayout(self.bg_widget)
         inner_layout.setContentsMargins(25, 20, 25, 20)
-        inner_layout.setSpacing(15)
+        inner_layout.setSpacing(5) 
 
         # 메시지 분리 - title / body / footer
-        # 딕셔너리 형태로 전달받으면 분리, 아니면 단일 메시지 처리
         if isinstance(message, dict) and 'title' in message:
             dialog_title = message.get('title', '')
             dialog_body = message.get('body', '')
@@ -274,29 +282,25 @@ class CustomAlertDialog(QDialog):
         # 버튼
         button_box = QHBoxLayout()
         button_box.addStretch()
-        ok_button = QPushButton("확인")
-        ok_button.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255,255,255,0.25);
-                border: 1px solid rgba(255,255,255,0.4);
-                color: white;
-                border-radius: 12px;
-                padding: 10px 20px;
-                font-size: 15px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgba(255,255,255,0.35);
-            }
-            QPushButton:pressed {
-                background-color: rgba(255,255,255,0.5);
-            }
-        """)
-        ok_button.clicked.connect(self.accept)
-        button_box.addWidget(ok_button)
-        button_box.addStretch()
-        inner_layout.addLayout(button_box)
+        
+        for config in self.button_configs:
+            btn = QPushButton(config['text'])
+            
+            if config['style'] == 'cancel':
+                btn.setStyleSheet(self._get_cancel_button_style())
+            elif config['style'] == 'confirm':
+                btn.setStyleSheet(self._get_confirm_button_style())
+            else:
+                btn.setStyleSheet(self._get_default_button_style())
 
+            btn.clicked.connect(self._create_button_action(config.get('callback')))
+            
+            button_box.addWidget(btn)
+
+        button_box.addStretch()
+        
+        inner_layout.addSpacing(10)
+        inner_layout.addLayout(button_box)
         layout.addWidget(self.bg_widget)
 
         # 팝업 창 투명도 초기화
@@ -305,6 +309,73 @@ class CustomAlertDialog(QDialog):
         self.fade_anim.setDuration(300)
         self.fade_anim.setStartValue(0.0)
         self.fade_anim.setEndValue(1.0)
+        self._fade_anim = self.fade_anim # GC 방지
+        
+    # ----------------------------------------------------------------------
+    # 버튼 스타일
+    # ----------------------------------------------------------------------
+
+    # 기본 버튼
+    def _get_default_button_style(self):
+        return """
+            QPushButton {
+                background-color: rgba(255,255,255,0.25);
+                color: white;
+                border-radius: 12px;
+                padding: 5px 5px;
+                font-size: 14px;
+                font-weight: bold;
+                min-width: 40px;
+                margin: 0px 5px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255,255,255,0.35);
+            }
+        """
+    
+    # 취소/닫기 버튼
+    def _get_cancel_button_style(self):
+        return """
+            QPushButton {
+                background-color: rgba(160,160,160,0.4);
+                color: white;
+                border-radius: 12px;
+                padding: 5px 5px;
+                font-size: 14px;
+                font-weight: bold;
+                min-width: 40px;
+                margin: 0px 5px;
+            }
+            QPushButton:hover {
+                background-color: rgba(159,159,159,0.5);
+            }
+        """
+
+    # 확인 버튼
+    def _get_confirm_button_style(self):
+        return """
+            QPushButton {
+                background-color: #3B6EEB;
+                color: white;
+                border-radius: 12px;
+                padding: 5px 5px;
+                font-size: 14px;
+                font-weight: bold;
+                min-width: 40px;
+                margin: 0px 5px;
+            }
+            QPushButton:hover {
+                background-color: #4A79F0;
+            }
+        """
+
+    # 버튼 클릭 -> 팝업 닫고 콜백 실행
+    def _create_button_action(self, callback):
+        def action():
+            self.close_popup()
+            if callback:
+                callback() 
+        return action
 
     # 중앙 정렬 + 페이드 인
     def showEvent(self, event):
@@ -321,10 +392,21 @@ class CustomAlertDialog(QDialog):
         # 페이드 인 시작
         self.fade_anim.start()
 
-    def accept(self):
+    # 팝업/오버레이 닫기
+    def close_popup(self):
         if self.overlay:
             self.overlay.fade_out_and_close()
-        super().accept()
+        super().close()
+
+    # 오버라이드
+    def accept(self):
+        self.done(QDialog.Accepted)
+        self.close_popup()
+    
+    # 오버라이드
+    def reject(self):
+        self.done(QDialog.Rejected)
+        self.close_popup()
 
 
 # 지정된 위젯에 페이드 인 → 유지 → 페이드 아웃 애니메이션 적용

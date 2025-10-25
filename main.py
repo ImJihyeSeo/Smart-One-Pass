@@ -14,6 +14,7 @@ from ui_pages.enrollment_start_page import EnrollmentStartPage
 from ui_pages.enrollment_recording_page import EnrollmentRecordingPage
 from ui_pages.reservation_page import ReservationPage, SeatMapPage
 from ui_pages.return_page import ReturnSeatPage
+from ui_pages.seat_map_page import ReadingRoom1SeatMapPage
 from ui_pages.extend_page import ExtendSeatPage
 
 from faceid.face_recognizer import FaceRecognizer
@@ -123,9 +124,14 @@ class MainWindow(QStackedWidget):
             self.addWidget(self.extend_page)
             self.setCurrentWidget(self.extend_page)
         
-        # 임시 열람실 배치도 페이지
+        # 열람실 배치도 페이지
         elif page_name == "seat_map":
-            self.seat_map_page = SeatMapPage(self.switch_page, data)
+            if data == "제1열람실":
+                self.seat_map_page = ReadingRoom1SeatMapPage(self.switch_page, data)
+            else:
+                # 기타 열람실 - 임시 페이지 사용 (수정 필요)
+                self.seat_map_page = SeatMapPage(self.switch_page, data)
+                
             self.addWidget(self.seat_map_page)
             self.setCurrentWidget(self.seat_map_page)
                 

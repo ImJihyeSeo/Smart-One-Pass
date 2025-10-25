@@ -98,14 +98,26 @@ class EnrollmentInputPage(BasePage):
         main_layout.addLayout(button_layout)
         main_layout.addStretch(1) 
 
+    def _show_popup(self, title, body, buttons=None):
+        info_message = {"title": title, "body": body, "footer": ""}
+        
+        if buttons is None:
+            buttons = [{'text': '확인', 'style': 'confirm', 'callback': None}  ]
+            
+        dialog = CustomAlertDialog(info_message, self, buttons=buttons, width=300)
+        dialog.exec()
+
     def validate_and_switch(self):
         name = self.name_input.text().strip()
         student_id = self.student_id_input.text().strip()
         
-        if not name or not student_id:
-            alert = CustomAlertDialog("이름과 학번을\n모두 입력해야 합니다", self)
-            alert.adjustSize()
-            alert.exec()
+        # 유효성 검사
+        if not name:
+            self._show_popup("입력 오류", "이름을 입력해 주세요.")
+            return
+
+        if not student_id or not student_id.isdigit() or len(student_id) != 8:
+            self._show_popup("입력 오류", "정확한 8자리 학번을 입력해 주세요.")
             return
 
         user_data = {"name": name, "student_id": student_id}
