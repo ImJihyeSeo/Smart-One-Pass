@@ -1,8 +1,7 @@
-from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout
+from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap
-from ui_style import TOTAL_ATTEMPTS, BUTTON_STYLE, IDLE_PAGE_STYLE, ImageButtonWidget
-
+from ui_style import TOTAL_ATTEMPTS, IDLE_PAGE_STYLE, ImageButtonWidget, scale_value, scale_qsize
 '''
 애플리케이션의 시작/기본 화면을 표시하는 페이지
 '''
@@ -26,7 +25,7 @@ class IdlePage(QWidget):
         main_layout.addWidget(self.create_logo_label(
             "resources/lib_logo.png",
             "MAIN LOGO",
-            QSize(300, 300),
+            scale_qsize(QSize(300, 300)),
             "font-size: 24px; color: #007bff; font-weight: bold;"
         ))
 
@@ -34,7 +33,7 @@ class IdlePage(QWidget):
         title_label = self.create_logo_label(
             "resources/title_logo.png",
             "TITLE LOGO",
-            QSize(300, 100),
+            scale_qsize(QSize(300, 100)),
             "font-size: 18px; color: #f5f5f5; font-weight: normal;"
         )
         title_label.setContentsMargins(0, 5, 0, 0)
@@ -46,8 +45,8 @@ class IdlePage(QWidget):
         button_container.setStyleSheet("background: transparent;")
         button_layout = QHBoxLayout(button_container)
         button_layout.setAlignment(Qt.AlignCenter)
-        button_layout.setSpacing(40)
-        button_size = QSize(110, 110) 
+        button_layout.setSpacing(scale_value(40))
+        button_size = scale_qsize(QSize(110, 110))
 
         start_recognition_btn = ImageButtonWidget("resources/entry_button.png", button_size) # 이미지 경로 지정
         start_recognition_btn.clicked.connect(lambda: self.switch_callback("processing", TOTAL_ATTEMPTS))
@@ -68,12 +67,12 @@ class IdlePage(QWidget):
         copyright_label = self.create_logo_label(
             "resources/copyright_logo.png",
             "COPYRIGHT LOGO",
-            QSize(100, 20),
+            scale_qsize(QSize(100, 20)),
             "font-size: 32px; color: #f5f5f5; font-weight: normal;"
         )
-        copyright_label.setContentsMargins(0, 60, 0, 0)
+        copyright_label.setContentsMargins(0, scale_value(60), 0, 0)
         main_layout.addWidget(copyright_label)
-        main_layout.addSpacing(20) 
+        main_layout.addSpacing(scale_value(20)) 
 
         self.setLayout(main_layout)
 

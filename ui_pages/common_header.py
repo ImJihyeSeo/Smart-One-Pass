@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap, QFontDatabase, QFont
-
+from ui_style import scale_value, scale_qsize
 
 class CommonHeader(QWidget):
     def __init__(self, switch_callback, parent=None):
@@ -28,9 +28,9 @@ class CommonHeader(QWidget):
         """)
 
         # 버튼/여백 크기 정의
-        BUTTON_WIDTH = 40
-        BUTTON_MARGIN_TOP = 10
-        BUTTON_MARGIN_SIDE = 10
+        BUTTON_WIDTH = scale_value(40)
+        BUTTON_MARGIN_TOP = scale_value(10) 
+        BUTTON_MARGIN_SIDE = scale_value(10)
         
         # 메인 레이아웃
         self.main_h_layout = QHBoxLayout(self)
@@ -49,11 +49,11 @@ class CommonHeader(QWidget):
         self.center_container = QWidget()
         center_layout = QVBoxLayout(self.center_container)
         center_layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-        center_layout.setContentsMargins(0, 50, 0, 0)
+        center_layout.setContentsMargins(0, scale_value(50), 0, 0)
 
         self.logo_label = QLabel()
         pixmap = QPixmap("resources/header.png")
-        logo_size = QSize(300, 100)
+        logo_size = scale_qsize(QSize(300, 100))
         
         if pixmap.isNull():
             self.logo_label.setText("LOGO")

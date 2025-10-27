@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from .base_page import BasePage
-from ui_style import BUTTON_STYLE, CANCEL_BUTTON_STYLE
+from ui_style import BUTTON_STYLE, CANCEL_BUTTON_STYLE, scale_value
 
 class ExtendSeatPage(BasePage):
     """좌석 연장 페이지"""
@@ -32,7 +32,7 @@ class ExtendSeatPage(BasePage):
                 color: {WHITE};
             }}
             #QuestionText {{
-                font-size: 20px;
+                font-size: 24px;
                 font-weight: 500;
                 color: {WHITE};
             }}
@@ -41,19 +41,19 @@ class ExtendSeatPage(BasePage):
         # 메인 레이아웃
         main_layout = self.get_content_layout()
         main_layout.setAlignment(Qt.AlignTop)
-        main_layout.setSpacing(30)
-        main_layout.addSpacing(40)
+        main_layout.setSpacing(scale_value(30))
+        main_layout.addSpacing(scale_value(40))
 
         # 질문 문구
         question_label = QLabel("좌석을 연장하시겠습니까?")
         question_label.setAlignment(Qt.AlignCenter)
         question_label.setObjectName("QuestionText")
         main_layout.addWidget(question_label)
-        main_layout.addSpacing(20)
+        main_layout.addSpacing(scale_value(20))
 
         # 카드 프레임
         card_frame = QFrame()
-        card_frame.setFixedWidth(380)
+        card_frame.setFixedWidth(scale_value(380))
         card_frame.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum) 
         card_frame.setStyleSheet(f"""
             QFrame {{
@@ -65,16 +65,16 @@ class ExtendSeatPage(BasePage):
 
         # 카드 내부 레이아웃
         card_h_layout = QHBoxLayout(card_frame)
-        card_h_layout.setContentsMargins(30, 25, 30, 25)
-        card_h_layout.setSpacing(25)
+        card_h_layout.setContentsMargins(scale_value(30), scale_value(25), scale_value(30), scale_value(25))
+        card_h_layout.setSpacing(scale_value(25))
 
         # 왼쪽 라벨
         key_container = QWidget()
-        key_container.setFixedWidth(100)
+        key_container.setFixedWidth(scale_value(100))
         key_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum) 
         key_layout = QVBoxLayout(key_container)
         key_layout.setContentsMargins(0, 0, 0, 0)
-        key_layout.setSpacing(22)
+        key_layout.setSpacing(scale_value(22))
 
         for text in ["좌석", "배정일시", "연장시간", "종료시간"]: 
             lbl = QLabel(text)
@@ -89,7 +89,7 @@ class ExtendSeatPage(BasePage):
 
         # 오른쪽 값 라벨
         value_layout = QVBoxLayout()
-        value_layout.setSpacing(22)
+        value_layout.setSpacing(scale_value(22))
 
         value_htmls = [
             # 좌석
@@ -127,13 +127,13 @@ class ExtendSeatPage(BasePage):
 
         # 연장 버튼
         extend_btn = QPushButton("연장")
-        extend_btn.setFixedSize(120, 45)
+        extend_btn.setFixedSize(scale_value(120), scale_value(45))
         extend_btn.setStyleSheet(BUTTON_STYLE)
         extend_btn.clicked.connect(self._handle_extend)
 
         # 취소 버튼
         cancel_btn = QPushButton("취소")
-        cancel_btn.setFixedSize(120, 45)
+        cancel_btn.setFixedSize(scale_value(120), scale_value(45))
         cancel_btn.setStyleSheet(CANCEL_BUTTON_STYLE)
         cancel_btn.clicked.connect(lambda: self.switch_callback("reservation"))
 
@@ -143,7 +143,7 @@ class ExtendSeatPage(BasePage):
         btn_h_layout.addWidget(cancel_btn)
         btn_h_layout.setAlignment(Qt.AlignCenter)
 
-        main_layout.addSpacing(30)
+        main_layout.addSpacing(scale_value(30))
         main_layout.addLayout(btn_h_layout)
         main_layout.addStretch(1)
 

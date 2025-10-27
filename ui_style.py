@@ -9,20 +9,43 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QColor, QPainter, QPixmap, QMouseEvent
 
-# 메시지 영역의 고정 높이 (픽셀)
-MESSAGE_AREA_HEIGHT = 100
+# -------------------비율 계산------------------
+# 기준 해상도
+REF_W = 500
+REF_H = 800
+
+# 타겟 해상도
+TARGET_W_MAIN = 800
+TARGET_H_MAIN = 1280
+
+# 스케일 팩터: 타겟 / 기준
+TARGET_SCALE_FACTOR = TARGET_W_MAIN / REF_W 
+
+def scale_value(value):
+    return round(value * TARGET_SCALE_FACTOR)
+
+def scale_qsize(qsize):
+    return QSize(scale_value(qsize.width()), scale_value(qsize.height()))
+# ---------------------------------------------
+
+# 메시지 영역 고정 높이
+MESSAGE_AREA_HEIGHT_REF = 100
+MESSAGE_AREA_HEIGHT = scale_value(MESSAGE_AREA_HEIGHT_REF)
 
 # 최대 재시도 횟수
 TOTAL_ATTEMPTS = 3
 
 # 웹캠 영상 크기 (ReadyPage, ProcessingPage 공통)
-TARGET_W, TARGET_H = 270, 400
+TARGET_W_REF, TARGET_H_REF = 350, 520
+TARGET_W, TARGET_H = scale_value(TARGET_W_REF), scale_value(TARGET_H_REF)
 
 # 둥근 모서리 반경
-BORDER_RADIUS = 20
+BORDER_RADIUS_REF = 20
+BORDER_RADIUS = scale_value(BORDER_RADIUS_REF)
 
 # 웹캠 화면 위치 조정 위한 상단 간격
-TOP_SPACING = 30
+TOP_SPACING_REF = 30
+TOP_SPACING = scale_value(TOP_SPACING_REF)
 
 # 얼굴 인식 유지 시간 (초)
 PROCESSING_DURATION = 3.0 
@@ -34,7 +57,7 @@ BUTTON_STYLE = """
         color: white; 
         border-radius: 20px;
         padding: 12px 25px;
-        font-size: 16px; 
+        font-size: 18px; 
         font-weight: bold;
         min-height: 20px;
         min-width: 60px;
@@ -51,7 +74,7 @@ CANCEL_BUTTON_STYLE = """
         color: white; 
         border-radius: 20px;
         padding: 12px 25px;
-        font-size: 16px; 
+        font-size: 18px; 
         font-weight: bold;
         min-height: 20px;
         min-width: 60px;
@@ -76,11 +99,11 @@ ICON_BUTTON_STYLE = """
 """
 
 # 기본 라벨 스타일
-LABEL_STYLE = "color: #ffffff; font-size: 14px; margin: 0px; padding: 8px;"
+LABEL_STYLE = "color: #ffffff; font-size: 16px; margin: 0px; padding: 8px;"
 # 메인 안내 메시지
-TITLE_STYLE = "font-size: 24px; color: #ffffff; margin-bottom: 5px;"
+TITLE_STYLE = "font-size: 30px; color: #ffffff; margin-bottom: 5px;"
 # 서브 안내 메시지
-GUIDE_STYLE = "font-size: 14px; color: #ffffff;"
+GUIDE_STYLE = "font-size: 16px; color: #ffffff;"
 
 # 입력 필드 스타일
 INPUT_STYLE = """
@@ -90,7 +113,7 @@ INPUT_STYLE = """
         border: none;
         border-radius: 18px;
         padding: 10px;
-        font-size: 12px;
+        font-size: 16px;
     }
     QLineEdit:focus {
         border: 1px solid #4A90E2;

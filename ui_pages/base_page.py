@@ -1,7 +1,7 @@
-# base_page.py
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QSpacerItem
 from .common_header import CommonHeader
 from PySide6.QtGui import QColor, QPalette
+from ui_style import scale_value
 
 class BasePage(QWidget):
     def __init__(self, switch_callback):
@@ -11,7 +11,7 @@ class BasePage(QWidget):
         # 공통 레이아웃
         self.base_layout = QVBoxLayout(self)
         self.base_layout.setContentsMargins(0, 0, 0, 0)
-        self.base_layout.setSpacing(40)
+        self.base_layout.setSpacing(scale_value(40))
         
         # 배경색 통일
         palette = self.palette()
@@ -24,7 +24,7 @@ class BasePage(QWidget):
         self.base_layout.addWidget(self.common_header)
 
         # spacing 위젯
-        self.header_spacing = QSpacerItem(0, 30)
+        self.header_spacing = QSpacerItem(0, scale_value(30))
         self.base_layout.addSpacerItem(self.header_spacing)
 
         # 콘텐츠 영역

@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QMouseEvent
-from ui_style import CustomAlertDialog
+from ui_style import CustomAlertDialog, scale_value
 from .base_page import BasePage 
 
 
@@ -149,11 +149,14 @@ class ReadingRoom1SeatMapPage(BasePage):
         frame = QFrame()
         frame.setFrameShape(QFrame.StyledPanel)
         frame.setFrameShadow(QFrame.Plain)
-        frame.setMaximumHeight(500)
-        frame.setMaximumWidth(500)
+
+        VIEWPORT_WIDTH = scale_value(430) 
+        VIEWPORT_HEIGHT = scale_value(500)
+        frame.setFixedSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+
         frame.setStyleSheet("""
             QFrame {
-                border: 1px solid #1a1a1a;
+                border: 2px solid #1a1a1a;
                 border-radius: 0px;
                 background-color: transparent;
             }
@@ -162,7 +165,7 @@ class ReadingRoom1SeatMapPage(BasePage):
         frame_layout.addWidget(movable_container)
         frame_layout.setContentsMargins(0, 0, 0, 0)
         
-        content_layout.addWidget(frame, 1)
+        content_layout.addWidget(frame, 1, alignment=Qt.AlignHCenter)
         
         # ------------------------------------------------
         # 열람실 선택 드롭다운
@@ -209,7 +212,7 @@ class ReadingRoom1SeatMapPage(BasePage):
         """)
 
         # 열람실 목록 / 현재 페이지 설정
-        room_list = ["제1열람실", "제2-1열람실", "제2-2열람실", "제2-3열람실(대학원생 전용)"]
+        room_list = ["제1열람실", "제2-1열람실", "제2-2열람실", "제2-2열람실(대학원생 전용)"]
         self.room_selector.addItems(room_list)
         current_index = self.room_selector.findText(self.room_name)
         if current_index >= 0:

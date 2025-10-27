@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QAbstractAnimation, QEasingCurve, QSequentialAnimationGroup
 from PySide6.QtGui import QPixmap, QImage, QPainter, QBitmap, QColor
 
-from ui_style import TARGET_W, TARGET_H, MESSAGE_AREA_HEIGHT, BORDER_RADIUS 
+from ui_style import TARGET_W, TARGET_H, MESSAGE_AREA_HEIGHT, BORDER_RADIUS, scale_qsize, scale_value
 from cv_tools import detect_faces
 from .base_page import BasePage
 
@@ -53,7 +53,7 @@ class ProcessingPage(BasePage):
         """)
 
         # 가이드라인
-        GUIDE_IMAGE_SIZE = 130
+        GUIDE_IMAGE_SIZE = scale_value(130)
 
         self.guide_image_label = QLabel(self.video_label) # video_label을 부모로 설정
         self.guide_image_label.setFixedSize(GUIDE_IMAGE_SIZE, GUIDE_IMAGE_SIZE)
@@ -115,7 +115,7 @@ class ProcessingPage(BasePage):
         
         self.instruction = QLabel("얼굴 인식을 시작하려면 화면을 바라봐주세요.")
         self.instruction.setAlignment(Qt.AlignCenter)
-        self.instruction.setStyleSheet("font-size: 18px; color: #ffffff; background: transparent;")
+        self.instruction.setStyleSheet("font-size: 22px; color: #ffffff; background: transparent;")
         
         message_layout.addWidget(self.instruction)
         
@@ -145,15 +145,24 @@ class ProcessingPage(BasePage):
         # 웹캠 화면 크롭 로직
         frame = cv2.flip(frame, 1) # 좌우 반전
         h, w, _ = frame.shape
-        target_h, target_w = self.TARGET_H, self.TARGET_W
+        target_h, target_w = self.TARGET_H, self.TARGET_W 
+        frame_ratio = w / h
+        target_ratio = target_w / target_h
         
-        if h > target_h:
-            start_y = (h - target_h) // 2
-            frame = frame[start_y:start_y + target_h, :]
-        if w > target_w:
-            start_x = (w - target_w) // 2
-            frame = frame[:, start_x:start_x + target_w]
+        if frame_ratio > target_ratio:
+            # 웹캠 영상이 타겟보다 넓은 경우 (좌우 크롭)
+            new_w = int(h * target_ratio)
+            start_x = (w - new_w) // 2
+            frame = frame[:, start_x:start_x + new_w]
+        elif frame_ratio < target_ratio:
+            # 웹캠 영상이 타겟보다 좁은 경우 (상하 크롭)
+            new_h = int(w / target_ratio)
+            start_y = (h - new_h) // 2
+            frame = frame[start_y:start_y + new_h, :]
 
+        # 크롭된 프레임 타겟 크기로 리사이즈해서 채우기
+        frame = cv2.resize(frame, (target_w, target_h))
+        
         # --------------------------
         # AI 모델 / 감지 로직
         # --------------------------

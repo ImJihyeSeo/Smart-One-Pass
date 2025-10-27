@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QTimer
 
-from ui_style import TOTAL_ATTEMPTS, CustomAlertDialog
+from ui_style import TOTAL_ATTEMPTS, CustomAlertDialog, TARGET_W_MAIN, TARGET_H_MAIN
 from ui_pages.idle_page import IdlePage
 from ui_pages.processing_page import ProcessingPage
 from ui_pages.result_page import ResultPage
@@ -44,7 +44,7 @@ class MainWindow(QStackedWidget):
         self.addWidget(self.idle_page)
         self.setCurrentWidget(self.idle_page)
         self.setWindowTitle("얼굴 인식 기반 시스템")
-        self.setFixedSize(500, 750)
+        self.setFixedSize(TARGET_W_MAIN, TARGET_H_MAIN)
         self.setWindowFlags(Qt.FramelessWindowHint) 
         self.setStyleSheet("""
             MainWindow {

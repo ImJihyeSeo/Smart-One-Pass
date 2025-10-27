@@ -1,12 +1,12 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout, 
-    QGridLayout, QFrame, QSizePolicy
+    QGridLayout, QFrame, QSizePolicy, QSpacerItem
 )
-from PySide6.QtCore import Qt, QDate, QRectF
+from PySide6.QtCore import Qt, QDate, QRectF, QRect
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor
 
 from .base_page import BasePage
-from ui_style import BUTTON_STYLE, ICON_BUTTON_STYLE, CustomAlertDialog
+from ui_style import BUTTON_STYLE, ICON_BUTTON_STYLE, CustomAlertDialog, scale_value
 
 class CircleProgressWidget(QFrame):
     """ 좌석 현황을 원형 도넛 차트로 표시하고 텍스트 포함하는 커스텀 위젯 """
@@ -18,76 +18,44 @@ class CircleProgressWidget(QFrame):
         self.callback = callback
         
         # 전체 위젯
-        self.CARD_WIDTH = 130
-        self.CARD_HEIGHT = 130 
+        self.CARD_WIDTH = scale_value(160)
+        self.CARD_HEIGHT = scale_value(160)
         self.setFixedSize(self.CARD_WIDTH, self.CARD_HEIGHT) 
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet("background: transparent;")
         
         # 원형 차트 관련 변수
-        self.chart_size = 80 
-        self.ring_width = 10
+        self.chart_size = scale_value(100)
+        self.ring_width = scale_value(12)
         self.progress_percent = (self.current / self.total) if self.total > 0 else 0
         
+        # 텍스트 위젯
+        self.num_text = f"{total - current}"
+        self.usage_text = f"{current}/{total}"
+        self.name_text = name
+
         # 메인 레이아웃
         main_layout = QVBoxLayout(self) 
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-        main_layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter) 
-        
-        # 중앙 컨텐츠 - 좌석 사용현황 표시
-        self.center_content = QWidget(self) 
-        self.center_content.setStyleSheet("background: transparent;")
-        self.center_content.setFixedHeight(90) 
-        
-        # 중앙 컨텐츠 내부 레이아웃
-        center_v_layout = QVBoxLayout(self.center_content)
-        center_v_layout.setAlignment(Qt.AlignCenter)
-        center_v_layout.setContentsMargins(0, 0, 0, 0)
-        center_v_layout.setSpacing(5) 
-        
-        # 1. 잔여 좌석
-        self.num_label = QLabel(f"{total - current}")
-        self.num_label.setAlignment(Qt.AlignCenter)
-        self.num_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #ffffff; background: transparent;")
-        center_v_layout.addWidget(self.num_label, alignment=Qt.AlignCenter)
-        
-        # 2. 사용 좌석 / 전체 좌석
-        self.usage_label = QLabel(f"{current}/{total}")
-        self.usage_label.setAlignment(Qt.AlignCenter)
-        self.usage_label.setStyleSheet("font-size: 10px; color: #aaaaaa; background: transparent;")
-        center_v_layout.addWidget(self.usage_label, alignment=Qt.AlignCenter)
-        
-        # 3. 열람실명
-        self.name_label = QLabel(name)
-        self.name_label.setAlignment(Qt.AlignCenter)
-        self.name_label.setWordWrap(True)
-        self.name_label.setStyleSheet("font-size: 12px; font-weight: 500; color: #ffffff; background: transparent;")
-        
-        main_layout.addWidget(self.center_content, 0, alignment=Qt.AlignHCenter)
-        
-        # 이름 레이블을 담을 컨테이너
-        self.name_container = QWidget(self)
-        self.name_container.setStyleSheet("background: transparent;")
-        self.name_container.setFixedHeight(40)
-        name_layout = QHBoxLayout(self.name_container)
-        name_layout.setContentsMargins(0, 0, 0, 0)
-        name_layout.addWidget(self.name_label, alignment=Qt.AlignCenter)
-        
-        main_layout.addWidget(self.name_container, 0, alignment=Qt.AlignHCenter) 
-
+        main_layout.addItem(QSpacerItem(0, scale_value(50), QSizePolicy.Fixed, QSizePolicy.Fixed))
+    
     def paintEvent(self, event):
         """ 원형 차트 그리는 로직 """
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        center_x = self.width() // 2
-        center_y = self.center_content.height() // 2 
+        center_x = int(self.width() / 2)
+        BOTTOM_TEXT_SPACE = scale_value(50) 
+        chart_area_height = self.height() - BOTTOM_TEXT_SPACE
+        chart_center_y = int(chart_area_height / 2) + scale_value(5)
         
         # 사각형 경계
-        rect = QRectF(center_x - self.chart_size / 2, 
-                      center_y - self.chart_size / 2, 
-                      self.chart_size, self.chart_size)
+        rect = QRectF(
+            int(center_x - self.chart_size / 2), 
+            int(chart_center_y - self.chart_size / 2), 
+            self.chart_size, 
+            self.chart_size
+        )
         
         # 배경 도넛
         pen_bg = QPen(QColor(40, 40, 40), self.ring_width)
@@ -96,13 +64,78 @@ class CircleProgressWidget(QFrame):
         painter.drawArc(rect, 0 * 16, 360 * 16)
 
         # 진행률 도넛
-        pen_fg = QPen(QColor(0, 123, 255), self.ring_width)
-        pen_fg.setCapStyle(Qt.RoundCap)
+        BLUE = QColor(59, 110, 235)
+        pen_fg = QPen(BLUE, self.ring_width)
+        pen_fg.setCapStyle(Qt.FlatCap)
         painter.setPen(pen_fg)
-        
         span_angle = int(360 * self.progress_percent)
+        painter.drawArc(rect, (90 + 360) * 16, span_angle * 16)
 
-        painter.drawArc(rect, (90 + 360) * 16, -span_angle * 16) 
+        # 도넛 안쪽 경계선
+        donut_radius = self.chart_size / 2.0
+        inner_radius = donut_radius - (self.ring_width / 2.0)
+        
+        # 안쪽 경계선 그릴 사각형 경계
+        INNER_BORDER_RECT = QRectF(
+            center_x - inner_radius, 
+            chart_center_y - inner_radius, 
+            inner_radius * 2, 
+            inner_radius * 2
+        )
+        
+        BORDER_WIDTH = scale_value(1) 
+        inner_pen = QPen(BLUE, BORDER_WIDTH, Qt.SolidLine, Qt.RoundCap)
+        painter.setPen(inner_pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(INNER_BORDER_RECT)
+
+        # ---------------------------------------------
+        # 텍스트
+        # ---------------------------------------------
+
+        text_center_y = chart_center_y
+        donut_bottom_y = chart_center_y + (self.chart_size / 2.0)   # 도넛 가장 아래쪽 Y좌표
+        VERTICAL_GAP = scale_value(10) 
+        TEXT_START_Y = int(donut_bottom_y + VERTICAL_GAP)   # 텍스트 시작 Y좌표
+        NUM_HEIGHT = scale_value(30)
+        USAGE_HEIGHT = scale_value(15)
+        CENTER_SHIFT_ADJUSTMENT = scale_value(1)
+
+        # 잔여 좌석
+        font_num = painter.font()
+        font_num.setPointSize(scale_value(15))
+        font_num.setBold(True)
+        painter.setFont(font_num)
+        painter.setPen(BLUE)
+
+        num_rect_center_y = text_center_y - (USAGE_HEIGHT / 2) - CENTER_SHIFT_ADJUSTMENT        
+        num_rect_start_y = num_rect_center_y - (NUM_HEIGHT / 2)
+        num_rect = QRect(0, int(num_rect_start_y), self.width(), NUM_HEIGHT) 
+        painter.drawText(num_rect, Qt.AlignCenter, self.num_text)
+        
+        # 사용 좌석/전체 좌석
+        font_usage = painter.font()
+        font_usage.setPointSize(scale_value(9))
+        font_usage.setBold(False)
+        painter.setFont(font_usage)
+        painter.setPen(QColor(170, 170, 170))
+
+        usage_rect_center_y = text_center_y + (NUM_HEIGHT / 2) + CENTER_SHIFT_ADJUSTMENT
+        usage_rect_start_y = usage_rect_center_y - (USAGE_HEIGHT / 2)
+        usage_rect = QRect(0, int(usage_rect_start_y), self.width(), USAGE_HEIGHT)
+        painter.drawText(usage_rect, Qt.AlignCenter, self.usage_text)
+
+        # 열람실명
+        font_name = painter.font()
+        font_name.setPointSize(scale_value(11))
+        font_name.setBold(False) 
+        painter.setFont(font_name)
+        painter.setPen(QColor(255, 255, 255))
+
+        name_rect = QRect(0, TEXT_START_Y, self.width(), self.height() - TEXT_START_Y)
+
+        painter.drawText(name_rect, Qt.AlignTop | Qt.AlignHCenter | Qt.TextWordWrap, self.name_text)
+        painter.end()
 
     def mousePressEvent(self, event):
         """ 위젯 클릭 시 콜백 함수 호출 """
@@ -113,7 +146,7 @@ class ReservationPage(BasePage):
         super().__init__(switch_callback)
         self.switch_callback = switch_callback
 
-        self.set_header_spacing(-30)
+        self.set_header_spacing(scale_value(-50))
         self.setObjectName("ReservationPage")
         self.setStyleSheet("""
             #ReservationPage {
@@ -167,20 +200,20 @@ class ReservationPage(BasePage):
 
     def _setup_status_cards(self, layout):
         grid_container = QFrame()
-        GRID_WIDTH = 260    # 컨테이너 너비 고정 -> 중앙 공백 제거
+        GRID_WIDTH = scale_value(400)   # 컨테이너 너비 고정 -> 중앙 공백 제거
         grid_container.setFixedWidth(GRID_WIDTH)
         grid_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         grid_container.setStyleSheet("background: transparent; border: none;")
 
         status_grid = QGridLayout(grid_container)
         status_grid.setContentsMargins(0, 0, 0, 0)
-        status_grid.setSpacing(10)  # 카드 간 간격 조정
+        status_grid.setSpacing(scale_value(10))  # 카드 간 간격 조정
 
         room_data = [
-            ("제1열람실", 371, 375, "제1열람실"),
+            ("제1열람실", 8, 375, "제1열람실"),
             ("제2-1열람실", 55, 270, "제2-1열람실"),
             ("제2-2열람실", 102, 136, "제2-2열람실"),
-            ("제2-3열람실\n(대학원생 전용)", 15, 62, "제2-3열람실"),
+            ("제2-2열람실\n(대학원생 전용)", 15, 62, "제2-2열람실"),
         ]
         
         for i, (name, current, total, key) in enumerate(room_data):
@@ -189,25 +222,40 @@ class ReservationPage(BasePage):
             status_card = self._create_status_card(name, current, total, lambda checked, k=key: self._go_to_seat_map(k))
             status_grid.addWidget(status_card, row, col) 
 
-        layout.addWidget(grid_container, alignment=Qt.AlignHCenter)
-        layout.addSpacing(40)
+        # 테두리
+        outer_frame = QFrame()
+        
+        outer_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: transparent;
+                border: 1px solid #444444; /* 연한 회색 테두리 */
+                border-radius: {scale_value(20)}px;
+                padding: {scale_value(20)}px;
+                margin: 0px;
+            }}
+        """)
+        
+        outer_layout = QVBoxLayout(outer_frame)
+        outer_layout.setContentsMargins(10, 10, 10, 10)
+        outer_layout.addWidget(grid_container, alignment=Qt.AlignCenter) 
+        
+        layout.addWidget(outer_frame, alignment=Qt.AlignHCenter)
+        layout.addSpacing(scale_value(40))
     
-
     def _create_icon_button(self, text, icon_path, callback, popup_title=None):
         """ 이미지와 텍스트를 위아래로 배치하는 버튼 생성 """
         btn = QPushButton()
         btn.setStyleSheet(ICON_BUTTON_STYLE.replace("font-size: 14px;", "")) 
-        btn.setFixedSize(65, 60)
+        btn.setFixedSize(scale_value(80), scale_value(75))
 
         v_layout = QVBoxLayout(btn)
         v_layout.setAlignment(Qt.AlignCenter)
-        v_layout.setSpacing(1) 
-        v_layout.setContentsMargins(0, 5, 0, 5)
+        v_layout.setContentsMargins(0, 0, 0, 0)
 
         # 1. 이미지
         icon_label = QLabel()
         icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setFixedSize(24, 24)
+        icon_label.setFixedSize(scale_value(32), scale_value(32))
         
         try:
             pixmap = QPixmap(f"resources/{icon_path}")
@@ -224,7 +272,7 @@ class ReservationPage(BasePage):
         # 2. 텍스트
         text_label = QLabel(text)
         text_label.setAlignment(Qt.AlignCenter)
-        text_label.setStyleSheet("font-size: 9px; color: #ffffff;")
+        text_label.setStyleSheet("font-size: 12px; color: #ffffff;")
         
         v_layout.addWidget(icon_label, alignment=Qt.AlignCenter)
         v_layout.addWidget(text_label, alignment=Qt.AlignCenter)
@@ -238,7 +286,6 @@ class ReservationPage(BasePage):
 
     def _create_status_card(self, name, current, total, callback):
         return CircleProgressWidget(name, current, total, lambda room_name: self._go_to_seat_map(room_name))
-
     
     def _show_popup(self, title):
         dialog_buttons = None
@@ -247,7 +294,7 @@ class ReservationPage(BasePage):
         current_reservation = self._get_user_reservation_data() # 예약 정보 가져오기
 
         if title == "안내사항":
-            dialog_width = 400
+            dialog_width = scale_value(400)
             info_message = {
                 "title": "이용 완료 시 좌석 반납 필수",
                 "body": "기본 이용 시간: 6시간<br>" 

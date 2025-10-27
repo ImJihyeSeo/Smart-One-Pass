@@ -4,8 +4,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from .base_page import BasePage
-from ui_style import BUTTON_STYLE, INPUT_STYLE, LABEL_STYLE, TITLE_STYLE, GUIDE_STYLE, CustomAlertDialog
-
+from ui_style import BUTTON_STYLE, INPUT_STYLE, LABEL_STYLE, TITLE_STYLE, GUIDE_STYLE, CustomAlertDialog, scale_value
 
 class EnrollmentInputPage(BasePage):
     def __init__(self, switch_callback):
@@ -14,6 +13,7 @@ class EnrollmentInputPage(BasePage):
 
         main_layout = self.get_content_layout()
         main_layout.setAlignment(Qt.AlignTop)
+        main_layout.addSpacing(scale_value(40))
 
         # 안내 텍스트
         title_label = QLabel("얼굴 등록을 위해\n이름과 학번을 입력해주세요")
@@ -26,11 +26,11 @@ class EnrollmentInputPage(BasePage):
         guide_label.setStyleSheet(GUIDE_STYLE)
         main_layout.addWidget(guide_label)
         
-        main_layout.addSpacing(40)
+        main_layout.addSpacing(scale_value(40))
 
         # 중앙 입력 폼 감싸는 컨테이너
         input_container_frame = QFrame()
-        input_container_frame.setFixedWidth(350) 
+        input_container_frame.setFixedWidth(scale_value(350))
         input_container_frame.setStyleSheet("""
             QFrame {
                 background-color: #1a1a1a;
@@ -90,7 +90,7 @@ class EnrollmentInputPage(BasePage):
         start_btn.clicked.connect(self.validate_and_switch)
         
         button_layout = QHBoxLayout()
-        button_layout.setContentsMargins(0, 30, 0, 30)
+        button_layout.setContentsMargins(0, scale_value(30), 0, scale_value(30))         
         button_layout.addStretch(1)
         button_layout.addWidget(start_btn)
         button_layout.addStretch(1)

@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap, QPainter
-from ui_style import BUTTON_STYLE, TITLE_STYLE, GUIDE_STYLE
+from ui_style import BUTTON_STYLE, TITLE_STYLE, GUIDE_STYLE, scale_value, scale_qsize
 from .base_page import BasePage
 
 class EnrollmentStartPage(BasePage):
@@ -13,13 +13,14 @@ class EnrollmentStartPage(BasePage):
 
         main_layout = self.get_content_layout()
         main_layout.setAlignment(Qt.AlignTop)
+        main_layout.addSpacing(scale_value(40))
                 
         # 시작 안내
         title_label = QLabel("얼굴 등록을 시작합니다!")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet(TITLE_STYLE)
         main_layout.addWidget(title_label)
-        main_layout.addSpacing(40)
+        main_layout.addSpacing(scale_value(30))
         
         # 유의사항 안내
         guidance_box = QFrame()
@@ -30,14 +31,14 @@ class EnrollmentStartPage(BasePage):
                 padding: 10px;
             }
         """)
-        guidance_box.setFixedWidth(400)
+        guidance_box.setFixedWidth(scale_value(400))
         guidance_layout = QVBoxLayout(guidance_box)
         guidance_layout.setAlignment(Qt.AlignCenter)
         guidance_layout.setSpacing(5)
         guidance_layout.setContentsMargins(10, 10, 10, 10)
 
         guidance_title = QLabel("촬영 시 유의사항")
-        guidance_title.setStyleSheet("font-size: 18px; color: white;")
+        guidance_title.setStyleSheet("font-size: 20px; color: white;")
         guidance_title.setAlignment(Qt.AlignCenter)
 
         guidance_text_1 = QLabel("정확한 인증을 위해 총 3단계의 촬영이 진행됩니다.")
@@ -57,7 +58,7 @@ class EnrollmentStartPage(BasePage):
 
         # 금지 이미지
         IMAGE_BASE_PATH = "resources/"
-        IMAGE_SIZE = QSize(90, 90)
+        IMAGE_SIZE = scale_qsize(QSize(90, 90))
 
         prohibit_glasses = self.create_prohibit_overlay(
             base_image_path=IMAGE_BASE_PATH + "glasses.png",

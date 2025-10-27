@@ -8,7 +8,7 @@ from PySide6.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QBitmap
 import cv2
 import time
 
-from ui_style import TARGET_W, TARGET_H, BORDER_RADIUS, fade_in_out
+from ui_style import TARGET_W, TARGET_H, BORDER_RADIUS, fade_in_out, scale_value
 from cv_tools import detect_faces
 from .base_page import BasePage
 
@@ -67,6 +67,7 @@ class EnrollmentRecordingPage(BasePage):
         self.setStyleSheet("QWidget { background: transparent; }")
         main_layout = self.get_content_layout()
         main_layout.setAlignment(Qt.AlignTop)
+        self.set_header_spacing(scale_value(-10))
 
         # --------------------------
         # 단계 표시 바
@@ -101,7 +102,7 @@ class EnrollmentRecordingPage(BasePage):
         # 안내 메시지 라벨
         self.instruction_label = QLabel()
         self.instruction_label.setAlignment(Qt.AlignCenter)
-        self.instruction_label.setStyleSheet("font-size: 18px; color: #ffffff; margin-top: 20px;")
+        self.instruction_label.setStyleSheet("font-size: 22px; color: #ffffff; margin-top: 20px;")
        
         message_container = QWidget()
         message_layout = QVBoxLayout(message_container)
@@ -115,7 +116,7 @@ class EnrollmentRecordingPage(BasePage):
         # 가이드라인
         # --------------------------
         self.guide_image_label = QLabel(self.video_label)
-        GUIDE_IMAGE_SIZE = 130
+        GUIDE_IMAGE_SIZE = scale_value(130)
         self.guide_image_label.setFixedSize(GUIDE_IMAGE_SIZE, GUIDE_IMAGE_SIZE)
         self.guide_image_label.setStyleSheet("background: transparent;")
         self.guide_image_label.move(
@@ -225,12 +226,23 @@ class EnrollmentRecordingPage(BasePage):
         frame = cv2.flip(frame, 1)  # 좌우 반전
         h, w, _ = frame.shape
         target_h, target_w = self.TARGET_H, self.TARGET_W
-        if h > target_h:
-            start_y = (h - target_h) // 2
-            frame = frame[start_y:start_y + target_h, :]
-        if w > target_w:
-            start_x = (w - target_w) // 2
-            frame = frame[:, start_x:start_x + target_w]
+
+        frame_ratio = w / h
+        target_ratio = target_w / target_h
+        
+        if frame_ratio > target_ratio:
+            # 웹캠 영상이 타겟보다 넓은 경우 (좌우 크롭)
+            new_w = int(h * target_ratio)
+            start_x = (w - new_w) // 2
+            frame = frame[:, start_x:start_x + new_w]
+        elif frame_ratio < target_ratio:
+            # 웹캠 영상이 타겟보다 좁은 경우 (상하 크롭)
+            new_h = int(w / target_ratio)
+            start_y = (h - new_h) // 2
+            frame = frame[start_y:start_y + new_h, :]
+
+        # 크롭된 프레임 타겟 크기로 리사이즈해서 채우기
+        frame = cv2.resize(frame, (target_w, target_h))
 
         # 얼굴 감지 (UI 상태 관리)
         guide_width = int(target_w * 0.5)
@@ -284,7 +296,7 @@ class EnrollmentRecordingPage(BasePage):
                     if self.guide_animation.state() == QAbstractAnimation.Running:
                         self.guide_animation.stop()
                     self.guide_opacity_effect.setOpacity(1.0)
-                    self.instruction_label.setText(f"{current_instruction}\n화면 중앙에 얼굴을 위치시켜주세요.")
+                    self.instruction_label.setText(f"{current_instruction}\n※ 화면 중앙에 얼굴을 위치시켜주세요 ※")
                     self.state = "SHOW_INSTRUCTION"
             else:
                 # 샘플 확보 -> 다음 지침/단계
