@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
-    QGridLayout, QSizePolicy, QSpacerItem, QFrame, QComboBox
+    QGridLayout, QSizePolicy, QSpacerItem, QFrame, QComboBox, QLabel
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QMouseEvent
@@ -21,12 +21,20 @@ class DBManager:
         # 임시 데이터: 제1열람실 (room_id: 1) 및 제2-1열람실 (room_id: 2) 상태
         if room_id == 1:
             reserved_seats = [1, 2, 97, 101, 141, 142, 261, 345]
-            all_seats = list(range(1, 377 + 1)) # 전체 좌석 ID
+            all_seats = list(range(1, 380 + 1)) # 전체 좌석 ID
         
         elif room_id == 2:
             reserved_seats = [1, 5, 20, 30, 45, 60, 100, 150, 200, 250]
             all_seats = list(range(1, 270 + 1))
-        
+
+        elif room_id == 3:  # 제2-2열람실
+            reserved_seats = [5, 11, 25, 33, 65, 92, 118, 140, 157, 161]
+            all_seats = list(range(1, 176 + 1))
+
+        elif room_id == 4:  # 제2-2열람실(대학원생)
+            reserved_seats = [67, 100, 121, 130, 177, 185]
+            all_seats = list(range(1, 198 + 1))
+                
         else:
             return {}
 
@@ -78,6 +86,7 @@ class SeatButton(QPushButton):
             # 팝업 연결
             self.click()
 
+
 # ----------------------------------------------------------------------
 # 드래그 이동 컨테이너
 # ----------------------------------------------------------------------
@@ -90,8 +99,6 @@ class MovableSeatMapContainer(QWidget):
         
         self._drag_start_pos = None
         self._initial_pos = None
-        
-        self.inner_widget.setMinimumSize(self.inner_widget.sizeHint())
         self.inner_widget.move(0, 0) 
         
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -124,70 +131,28 @@ class MovableSeatMapContainer(QWidget):
         self._initial_pos = None
         event.accept()
 
+
 # ----------------------------------------------------------------------
 # 열람실 배치도 페이지
 # ----------------------------------------------------------------------
-class ReadingRoom1SeatMapPage(BasePage):
-    def __init__(self, switch_callback, room_name=None):
+class BaseSeatMapPage(BasePage):
+    """ 배치도 페이지 공통 로직 관리용 부모 클래스 """
+    def __init__(self, switch_callback, room_name):
         super().__init__(switch_callback)
-        self.room_name = room_name if room_name else "제1열람실"
-        
+        self.room_name = room_name
+        self.seat_statuses = {}
         self.db = DBManager()
-        
-        self.seat_statuses = self.db.get_all_seat_statuses(room_id=1)   # 지금은 제1열람실 데이터만 로드 (room_id=1)
 
-        content_layout = self.get_content_layout() 
-        self.set_header_spacing(0)
-        
-        # 배치도 영역
-        seat_map_container = QWidget()
-        self._create_seat_map_layout(seat_map_container, self.seat_statuses) 
-        
-        movable_container = MovableSeatMapContainer(seat_map_container)
-        
-        # 테두리 프레임
-        frame = QFrame()
-        frame.setFrameShape(QFrame.StyledPanel)
-        frame.setFrameShadow(QFrame.Plain)
-
-        VIEWPORT_WIDTH = scale_value(430) 
-        VIEWPORT_HEIGHT = scale_value(500)
-        frame.setFixedSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
-
-        frame.setStyleSheet("""
-            QFrame {
-                border: 2px solid #1a1a1a;
-                border-radius: 0px;
-                background-color: transparent;
-            }
-        """)
-        frame_layout = QVBoxLayout(frame)
-        frame_layout.addWidget(movable_container)
-        frame_layout.setContentsMargins(0, 0, 0, 0)
-        
-        content_layout.addWidget(frame, 1, alignment=Qt.AlignHCenter)
-        
-        # ------------------------------------------------
-        # 열람실 선택 드롭다운
-        # ------------------------------------------------
-        
-        # 중앙 정렬 위한 컨테이너
-        selection_container = QWidget()
-        selection_vbox = QVBoxLayout(selection_container)
-        selection_vbox.setContentsMargins(0, 0, 0, 0)
-        selection_vbox.setSpacing(5)
-        selection_vbox.setAlignment(Qt.AlignHCenter)
-        
-        self.room_selector = QComboBox()
-        self.room_selector.setObjectName("RoomSelector")
-        self.room_selector.setStyleSheet("""
+    def _get_combo_box_style(self):
+        """ QComboBox 스타일 반환 """
+        return """
             QComboBox {
                 background-color: transparent;
                 color: #ffffff;
                 border: 1px solid #1a1a1a;
                 border-radius: 4px;
                 padding: 5px 10px;
-                padding-right: 35px; /* 화살표 공간 */
+                padding-right: 35px;
                 font-size: 16px;
                 min-height: 40px;
             }
@@ -209,64 +174,55 @@ class ReadingRoom1SeatMapPage(BasePage):
                 color: #ffffff;
                 selection-background-color: #3263ed;
             }
-        """)
+        """
 
-        # 열람실 목록 / 현재 페이지 설정
-        room_list = ["제1열람실", "제2-1열람실", "제2-2열람실", "제2-2열람실(대학원생 전용)"]
-        self.room_selector.addItems(room_list)
-        current_index = self.room_selector.findText(self.room_name)
-        if current_index >= 0:
-            self.room_selector.setCurrentIndex(current_index)
-
-        # 페이지 전환
-        self.room_selector.currentIndexChanged.connect(self._handle_room_selection)
-        selection_vbox.addWidget(self.room_selector, alignment=Qt.AlignHCenter)
-
-        bottom_hbox = QHBoxLayout()
-        bottom_hbox.addStretch(1)
-        bottom_hbox.addWidget(selection_container)
-        bottom_hbox.addStretch(1)
-
-        content_layout.addLayout(bottom_hbox)
-    
-    # ----------------------------------------------------------------------
-    # 페이지 전환 처리
-    # ----------------------------------------------------------------------
     def _handle_room_selection(self, index):
         """ 드롭다운 선택 변경 시 해당 열람실 배치도 페이지로 전환 """
-        selected_room_name = self.room_selector.itemText(index)
+        selected_room_name = self.room_keys[index]  # 인덱스 사용해 실제 페이지 전환 키 가져옴
         
-        # 현재 열람실 선택 -> 무시
         if selected_room_name == self.room_name:
             return
 
         self.switch_callback("seat_map", selected_room_name)
 
     def _get_styled_seat_number(self, seat_id):
-        return f'<span style="color:#2e6cff;">{seat_id}</span>'
+        """ 캐럴, 장애인석인 경우 이름 대체해 반환 """
+        CARREL_START_ID = 193   # 캐럴석
+        CARREL_END_ID = 198
+        DISABLED_START_ID = 378 # 장애인석
+        DISABLED_END_ID = 380
+        
+        if CARREL_START_ID <= seat_id <= CARREL_END_ID:
+            carrel_num = 6 - (seat_id - CARREL_START_ID)
+            display_name = f"캐럴{carrel_num}"
+
+        elif DISABLED_START_ID <= seat_id <= DISABLED_END_ID:
+            disabled_num = seat_id - DISABLED_START_ID + 1
+            display_name = f"장애인{disabled_num}"
+        
+        else:
+            display_name = str(seat_id)
+        
+        return f'<span style="color:#2e6cff;">{display_name}</span>'
 
     def _show_reservation_popup(self, seat_id):
-        """ 좌석 클릭 시 팝업 띄움 """
+        """ 좌석 클릭 시 팝업 띄움 """     
+        styled_seat = self._get_styled_seat_number(seat_id)
         status = self.seat_statuses.get(seat_id, "unknown")
         
-        if status == "available":
-            # 예약 가능 좌석
+        if status == "available":   # 예약 가능 좌석
             title = "좌석배정"
-            body = f"{self.room_name} {self._get_styled_seat_number(seat_id)}번"
+            body = f"{self.room_name} {styled_seat}번"
             footer = ""
-
             buttons = [
                 {'text': '닫기', 'style': 'cancel', 'callback': None},
                 {'text': '배정', 'style': 'confirm', 'callback': lambda: self._process_reservation(seat_id)}
             ]
             
-        elif status == "reserved":
-            # 예약된 좌석
-            title = f"{self.room_name} {self._get_styled_seat_number(seat_id)}번"
+        elif status == "reserved":  # 예약된 좌석
+            title = f"{self.room_name} {styled_seat}번"
             body = "이용 불가"
             footer = ""
-            
-            # 닫기 버튼
             buttons = [{'text': '닫기', 'style': 'cancel', 'callback': None}]
             
         else: # 기타 상태
@@ -303,12 +259,266 @@ class ReadingRoom1SeatMapPage(BasePage):
         complete_dialog = CustomAlertDialog(complete_message, self, buttons=complete_buttons)
         complete_dialog.exec()
 
-    # ----------------------------------------------------------------------
-    # 배치도 생성 함수
-    # ----------------------------------------------------------------------
+    def _setup_common_ui(self, room_id):
+        """ 공통 UI (프레임, 드롭다운) 설정 """
+        content_layout = self.get_content_layout() 
+        self.set_header_spacing(0)
+        
+        # 배치도 영역
+        seat_map_container = QWidget()
+        seat_map_container.setMinimumSize(1200, 2000)
+        
+        self._create_seat_map_layout(seat_map_container, self.seat_statuses) 
+        
+        movable_container = MovableSeatMapContainer(seat_map_container)
+        
+        # ------------------------------------------------
+        # 테두리 프레임
+        # ------------------------------------------------
+
+        frame = QFrame()
+        frame.setFrameShape(QFrame.StyledPanel)
+        frame.setFrameShadow(QFrame.Plain)
+
+        VIEWPORT_WIDTH = scale_value(430) 
+        VIEWPORT_HEIGHT = scale_value(500)
+        frame.setFixedSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+
+        frame.setStyleSheet("""
+            QFrame {
+                border: 2px solid #1a1a1a;
+                border-radius: 0px;
+                background-color: transparent;
+            }
+        """)
+        frame_layout = QVBoxLayout(frame)
+        frame_layout.addWidget(movable_container)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+        
+        content_layout.addWidget(frame, 1, alignment=Qt.AlignHCenter)
+        
+        # ------------------------------------------------
+        # 열람실 선택 드롭다운
+        # ------------------------------------------------
+        
+        selection_container = QWidget()
+        selection_vbox = QVBoxLayout(selection_container)
+        selection_vbox.setContentsMargins(0, 0, 0, 0)
+        selection_vbox.setSpacing(5)
+        selection_vbox.setAlignment(Qt.AlignHCenter)
+        
+        self.room_selector = QComboBox()
+        self.room_selector.setObjectName("RoomSelector")
+        self.room_selector.setStyleSheet(self._get_combo_box_style()) 
+
+        # 페이지 전환에 사용할 실제 키 목록
+        self.room_keys = [
+            "제1열람실", 
+            "제2-1열람실", 
+            "제2-2열람실", 
+            "제2-2열람실\n(대학원생 전용)" # 실제 키는 \n 포함
+        ]
+
+        # 드롭다운에 표시될 텍스트 목록
+        display_list = [
+            "제1열람실", 
+            "제2-1열람실", 
+            "제2-2열람실", 
+            "제2-2열람실 (대학원생 전용)"
+        ]
+
+        self.room_selector.addItems(display_list)
+
+        # 현재 room_name에 해당하는 인덱스
+        try:
+            current_index = self.room_keys.index(self.room_name)
+            self.room_selector.setCurrentIndex(current_index)
+        except ValueError:
+            pass
+
+        current_index = self.room_selector.findText(self.room_name)
+        if current_index >= 0:
+            self.room_selector.setCurrentIndex(current_index)
+
+        self.room_selector.currentIndexChanged.connect(self._handle_room_selection)
+        selection_vbox.addWidget(self.room_selector, alignment=Qt.AlignHCenter)
+
+        bottom_hbox = QHBoxLayout()
+        bottom_hbox.addStretch(1)
+        bottom_hbox.addWidget(selection_container)
+        bottom_hbox.addStretch(1)
+
+        content_layout.addLayout(bottom_hbox)
 
     def _create_seat_map_layout(self, container, seat_statuses):
-        """ 배치도 레이아웃 구성 """
+        """ 서브 클래스에서 구현 """
+        pass
+
+    # ----------------------------------------------------------------------
+    # 배치도 생성 관련 보조 함수
+    # ----------------------------------------------------------------------
+    
+    def _create_seat_btn(self, seat_id, click_callback, seat_statuses):
+        """ 좌석 버튼 생성, 상태 전달, 클릭 이벤트 연결 """
+        status = seat_statuses.get(seat_id, "unknown")
+        btn = SeatButton(seat_id, current_status=status) 
+        btn.clicked.connect(lambda checked, s_id=seat_id: click_callback(s_id))
+        return btn
+    
+    def _wrap_and_center_grid(self, grid):
+        """ QGridLayout을 QHBoxLayout로 감싸 중앙에 배치 """
+        grid_widget = QWidget()
+        grid_widget.setLayout(grid)
+        
+        hbox = QHBoxLayout()
+        hbox.setSpacing(0)
+        hbox.setContentsMargins(0, 0, 0, 0)
+        hbox.addStretch(1)
+        hbox.addWidget(grid_widget)
+        hbox.addStretch(1)
+        
+        final_widget = QWidget()
+        final_widget.setLayout(hbox)
+
+        size_policy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        final_widget.setSizePolicy(size_policy)
+        return final_widget
+
+    # ----------------------------------------------------------------------
+    # 톱니바퀴형 블록 생성 함수
+    # ----------------------------------------------------------------------
+        
+    def _create_zig_zag_block_6col(self, seats_list, click_callback, seat_statuses):
+        """ 2행 6열"""
+        grid = QGridLayout()
+        grid.setSpacing(8)
+        grid.setContentsMargins(0, 0, 0, 0)
+        
+        seats_row1 = seats_list[0:6]; seats_row2 = seats_list[6:][::-1]
+        for i in range(6):
+            grid.addWidget(self._create_seat_btn(seats_row1[i], click_callback, seat_statuses), 0, i)
+            grid.addWidget(self._create_seat_btn(seats_row2[i], click_callback, seat_statuses), 1, i)
+        
+        return self._wrap_and_center_grid(grid)
+    
+    def _create_zig_zag_block_4col_layout(self, seats_list, click_callback, seat_statuses):
+        """ 2행 4열 """
+        grid = QGridLayout() 
+        grid.setSpacing(8)
+        grid.setContentsMargins(0, 0, 0, 0) 
+        
+        seats_row1, seats_row2 = seats_list[0:4], seats_list[4:]
+        for i in range(4):
+            grid.addWidget(self._create_seat_btn(seats_row1[i], click_callback, seat_statuses), 0, i)
+            grid.addWidget(self._create_seat_btn(seats_row2[i], click_callback, seat_statuses), 1, i)
+        return grid
+    
+    def _create_zig_zag_block_3col_layout(self, seats_list, click_callback, seat_statuses):
+        """ 2행 3열 """
+        grid = QGridLayout() 
+        grid.setSpacing(8)
+        grid.setContentsMargins(0, 0, 0, 0) 
+        
+        seats_row1, seats_row2 = seats_list[0:3], seats_list[3:]
+        for i in range(3):
+            grid.addWidget(self._create_seat_btn(seats_row1[i], click_callback, seat_statuses), 0, i)
+            grid.addWidget(self._create_seat_btn(seats_row2[i], click_callback, seat_statuses), 1, i)
+        return grid
+
+    def _create_zig_zag_block_3col(self, seats_list, click_callback, seat_statuses):
+        """ 2행 3열 """
+        grid = QGridLayout() 
+        grid.setSpacing(8)
+        grid.setContentsMargins(0, 0, 0, 0) 
+        
+        seats_row1, seats_row2 = seats_list[0:3], seats_list[3:]
+        for i in range(3):
+            # 0이 더미 좌석 -> QPushButton 대신 QLabel 추가
+            if seats_row1[i] > 0:
+                grid.addWidget(self._create_seat_btn(seats_row1[i], click_callback, seat_statuses), 0, i)
+            else:
+                # 더미 좌석
+                empty_lbl = QLabel("")
+                empty_lbl.setFixedSize(scale_value(35), scale_value(30))
+                grid.addWidget(empty_lbl, 0, i) 
+                
+            if seats_row2[i] > 0:
+                grid.addWidget(self._create_seat_btn(seats_row2[i], click_callback, seat_statuses), 1, i)
+            else:
+                # 더미 좌석
+                empty_lbl = QLabel("")
+                empty_lbl.setFixedSize(35, 30)
+                grid.addWidget(empty_lbl, 1, i)
+            
+        return self._wrap_and_center_grid(grid)
+
+    def _create_zig_zag_block_4col(self, seats_list, click_callback, seat_statuses):
+        """ 2행 4열 """
+        grid = QGridLayout() 
+        grid.setSpacing(8)
+        grid.setContentsMargins(0, 0, 0, 0)
+        
+        seats_row1, seats_row2 = seats_list[0:4], seats_list[4:]
+        for i in range(4):
+            grid.addWidget(self._create_seat_btn(seats_row1[i], click_callback, seat_statuses), 0, i)
+            grid.addWidget(self._create_seat_btn(seats_row2[i], click_callback, seat_statuses), 1, i)
+        
+        return self._wrap_and_center_grid(grid)
+
+    def _create_zig_zag_block_8col(self, seats_list, click_callback, seat_statuses):
+        """ 2행 8열 """
+        grid = QGridLayout() 
+        grid.setSpacing(4) 
+        grid.setContentsMargins(0, 0, 0, 0)
+        
+        seats_row1, seats_row2 = seats_list[0:8], seats_list[8:]
+        for i in range(8):
+            grid.addWidget(self._create_seat_btn(seats_row1[i], click_callback, seat_statuses), 0, i)
+            grid.addWidget(self._create_seat_btn(seats_row2[i], click_callback, seat_statuses), 1, i)
+        
+        return self._wrap_and_center_grid(grid)
+    
+    def _create_zig_zag_block_9col(self, seats_list, click_callback, seat_statuses):
+        """ 2행 9열 """
+        grid = QGridLayout()
+        grid.setSpacing(8)
+        grid.setContentsMargins(0, 0, 0, 0)
+        
+        seats_row1 = seats_list[0:9]
+        seats_row2 = seats_list[9:]
+        
+        for i in range(9):
+            grid.addWidget(self._create_seat_btn(seats_row1[i], click_callback, seat_statuses), 0, i)
+            grid.addWidget(self._create_seat_btn(seats_row2[i], click_callback, seat_statuses), 1, i)
+        
+        return self._wrap_and_center_grid(grid)
+
+    def _create_wall_block_2col(self, seats_L, seats_R, click_callback, seat_statuses):
+        """ N행 2열 """
+        grid = QGridLayout()
+        grid.setSpacing(8)
+        grid.setContentsMargins(0, 0, 0, 0)
+        
+        rows = len(seats_L)
+        for r in range(rows):
+            grid.addWidget(self._create_seat_btn(seats_L[r], click_callback, seat_statuses), r, 0)
+            grid.addWidget(self._create_seat_btn(seats_R[r], click_callback, seat_statuses), r, 1)
+        
+        return self._wrap_and_center_grid(grid)
+
+
+# ----------------------------------------------------------------------
+# 제1열람실 배치도 페이지
+# ----------------------------------------------------------------------
+class ReadingRoom1SeatMapPage(BaseSeatMapPage):
+    def __init__(self, switch_callback, room_name=None):
+        super().__init__(switch_callback, room_name if room_name else "제1열람실")
+        
+        self.seat_statuses = self.db.get_all_seat_statuses(room_id=1) # 제1열람실 데이터 로드
+        self._setup_common_ui(room_id=1)
+
+    def _create_seat_map_layout(self, container, seat_statuses):
+        """ 제1열람실 배치도 레이아웃 구성 """
         main_vbox = QVBoxLayout(container)
         main_vbox.setSpacing(0)
         main_vbox.setContentsMargins(20, 20, 20, 20)
@@ -321,111 +531,15 @@ class ReadingRoom1SeatMapPage(BasePage):
             'L': 0, 'S1': 1, 'CS': 2, 'S2': 3, 'CT': 4, 'S3': 7, 'R': 8, 'RW': 9
         }
         
-        # ----------------------------------------------------
-        # 좌석 버튼 생성 / 그리드 중앙 정렬 
-        # ----------------------------------------------------
-        
-        def create_seat_btn(seat_id, click_callback, seat_statuses):
-            """ 좌석 버튼 생성, 상태 전달, 클릭 이벤트 연결 """
-            status = seat_statuses.get(seat_id, "unknown")
-            btn = SeatButton(seat_id, current_status=status) 
-            btn.clicked.connect(lambda checked, s_id=seat_id: click_callback(s_id))
-            return btn
-        
-        def wrap_and_center_grid(grid):
-            """ QGridLayout을 QHBoxLayout로 감싸 중앙에 배치 """
-            grid_widget = QWidget()
-            grid_widget.setLayout(grid)
-            
-            hbox = QHBoxLayout()
-            hbox.setSpacing(0)
-            hbox.setContentsMargins(0, 0, 0, 0)
-            hbox.addStretch(1)
-            hbox.addWidget(grid_widget)
-            hbox.addStretch(1)
-            
-            final_widget = QWidget()
-            final_widget.setLayout(hbox)
-
-            size_policy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-            final_widget.setSizePolicy(size_policy)
-            return final_widget
-        
-        # ----------------------------------------------------
-        # 톱니바퀴형 블록 생성 함수
-        # ----------------------------------------------------
-        def create_zig_zag_block_6col(seats_list, click_callback, seat_statuses):
-            """ 2행 6열"""
-            grid = QGridLayout()
-            grid.setSpacing(8)
-            grid.setContentsMargins(0, 0, 0, 0)
-            
-            seats_row1 = seats_list[0:6]; seats_row2 = seats_list[6:][::-1]
-            for i in range(6):
-                grid.addWidget(create_seat_btn(seats_row1[i], click_callback, seat_statuses), 0, i)
-                grid.addWidget(create_seat_btn(seats_row2[i], click_callback, seat_statuses), 1, i)
-            
-            return wrap_and_center_grid(grid)
-        
-        def create_zig_zag_block_4col_layout(seats_list, click_callback, seat_statuses):
-            """ 2행 4열 """
-            grid = QGridLayout() 
-            grid.setSpacing(8)
-            grid.setContentsMargins(0, 0, 0, 0) 
-            
-            seats_row1, seats_row2 = seats_list[0:4], seats_list[4:]
-            for i in range(4):
-                grid.addWidget(create_seat_btn(seats_row1[i], click_callback, seat_statuses), 0, i)
-                grid.addWidget(create_seat_btn(seats_row2[i], click_callback, seat_statuses), 1, i)
-            return grid
-        
-        def create_zig_zag_block_3col_layout(seats_list, click_callback, seat_statuses):
-            """ 2행 3열"""
-            grid = QGridLayout() 
-            grid.setSpacing(8)
-            grid.setContentsMargins(0, 0, 0, 0) 
-            
-            seats_row1, seats_row2 = seats_list[0:3], seats_list[3:]
-            for i in range(3):
-                grid.addWidget(create_seat_btn(seats_row1[i], click_callback, seat_statuses), 0, i)
-                grid.addWidget(create_seat_btn(seats_row2[i], click_callback, seat_statuses), 1, i)
-            return grid
-
-        def create_zig_zag_block_8col(seats_list, click_callback, seat_statuses):
-            """ 2행 8열 """
-            grid = QGridLayout() 
-            grid.setSpacing(4) 
-            grid.setContentsMargins(0, 0, 0, 0)
-            
-            seats_row1, seats_row2 = seats_list[0:8], seats_list[8:]
-            for i in range(8):
-                grid.addWidget(create_seat_btn(seats_row1[i], click_callback, seat_statuses), 0, i)
-                grid.addWidget(create_seat_btn(seats_row2[i], click_callback, seat_statuses), 1, i)
-            
-            return wrap_and_center_grid(grid)
-        
-        def create_wall_block_2col(seats_L, seats_R, click_callback, seat_statuses):
-            """ 2열 """
-            grid = QGridLayout()
-            grid.setSpacing(8)
-            grid.setContentsMargins(0, 0, 0, 0)
-            
-            rows = len(seats_L)
-            for r in range(rows):
-                grid.addWidget(create_seat_btn(seats_L[r], click_callback, seat_statuses), r, 0)
-                grid.addWidget(create_seat_btn(seats_R[r], click_callback, seat_statuses), r, 1)
-            
-            return wrap_and_center_grid(grid)
-
         def create_side_group(seats_list, seat_statuses):
-            """ 왼쪽 구역 """
+            """ 왼쪽 구역 배치 """
             vbox = QVBoxLayout()
             vbox.setSpacing(0)
             vbox.setContentsMargins(0, 0, 0, 0)
             
-            vbox.addWidget(create_zig_zag_block_6col(seats_list[:12], self._show_reservation_popup, seat_statuses))
-            vbox.addItem(QSpacerItem(0, V_GAP_SMALL, QSizePolicy.Fixed, QSizePolicy.Fixed)) 
-            vbox.addWidget(create_zig_zag_block_6col(seats_list[12:], self._show_reservation_popup, seat_statuses))
+            vbox.addWidget(self._create_zig_zag_block_6col(seats_list[:12], self._show_reservation_popup, seat_statuses)) 
+            vbox.addItem(QSpacerItem(0, V_GAP_LARGE, QSizePolicy.Fixed, QSizePolicy.Fixed)) 
+            vbox.addWidget(self._create_zig_zag_block_6col(seats_list[12:], self._show_reservation_popup, seat_statuses)) 
             vbox.addStretch(1)
             
             widget = QWidget()
@@ -451,18 +565,44 @@ class ReadingRoom1SeatMapPage(BasePage):
         # 장애인석
         hbox_reserved = QHBoxLayout()
         hbox_reserved.setSpacing(5)
-        for i in range(1, 4):
-             btn = QPushButton(f"장애인{i}")
-             btn.setStyleSheet("background-color: #ff9800; color: white; border-radius: 4px; padding: 5px;")
-             hbox_reserved.addWidget(btn)
+        
+        # 장애인석 ID 할당
+        disabled_seat_ids = list(range(378, 381))
+        
+        # 버튼 크기
+        DISABLED_BTN_W = scale_value(45)
+        DISABLED_BTN_H = scale_value(30)
+        
+        for i, seat_id in enumerate(disabled_seat_ids):
+            current_status = seat_statuses.get(seat_id, "available")
+            
+            btn = SeatButton(seat_id, current_status=current_status)
+            btn.setFixedSize(DISABLED_BTN_W, DISABLED_BTN_H)
+            btn.setText(f"장애인{i + 1}") 
+            btn.setFont(QFont("Arial", 9))
+            
+            # 스타일
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: #ff9800; /* 노란색 배경 */
+                    color: white; 
+                    border-radius: 4px;
+                    padding: 3px;
+                    border: 1px solid #ff9800;
+                }}
+            """)
+            
+            btn.clicked.connect(lambda checked, s=seat_id: self._show_reservation_popup(s))
+            
+            hbox_reserved.addWidget(btn)
         
         # 블록 배치
         for i, widget in enumerate(all_left_blocks):
             vbox_left.addWidget(widget)
             if i < len(all_left_blocks) - 1:
-                vbox_left.addItem(QSpacerItem(0, V_GAP_SMALL, QSizePolicy.Fixed, QSizePolicy.Fixed))
+                vbox_left.addItem(QSpacerItem(0, V_GAP_LARGE, QSizePolicy.Fixed, QSizePolicy.Fixed))
         
-        vbox_left.addItem(QSpacerItem(0, V_GAP_SMALL, QSizePolicy.Fixed, QSizePolicy.Fixed)) 
+        vbox_left.addItem(QSpacerItem(0, V_GAP_LARGE, QSizePolicy.Fixed, QSizePolicy.Fixed)) 
         vbox_left.addLayout(hbox_reserved)
         vbox_left.addStretch(1) 
         
@@ -494,24 +634,24 @@ class ReadingRoom1SeatMapPage(BasePage):
         # 상단
         for i, (seats_L, seats_R, seats_T, rows) in enumerate(central_combined_blocks):
             # 2번 구역
-            center_layout.addWidget(create_wall_block_2col(seats_L, seats_R, self._show_reservation_popup, seat_statuses), 
-                                    current_center_grid_row, col_map['CS'], rows, 1, Qt.AlignTop)
+            center_layout.addWidget(self._create_wall_block_2col(seats_L, seats_R, self._show_reservation_popup, seat_statuses), 
+                                    current_center_grid_row, col_map['CS'], rows, 1, Qt.AlignTop) 
             
             # 3번 구역
-            vbox_table.addWidget(create_zig_zag_block_6col(seats_T, self._show_reservation_popup, seat_statuses), Qt.AlignTop)
+            vbox_table.addWidget(self._create_zig_zag_block_6col(seats_T, self._show_reservation_popup, seat_statuses), Qt.AlignTop)
             
             current_center_grid_row += rows
             
             # 2번 구역 간격
             if i < len(central_combined_blocks) - 1:
-                center_layout.addItem(QSpacerItem(0, V_GAP_SMALL, QSizePolicy.Fixed, QSizePolicy.Fixed), current_center_grid_row, col_map['CS'], 1, 4) 
+                center_layout.addItem(QSpacerItem(0, V_GAP_LARGE, QSizePolicy.Fixed, QSizePolicy.Fixed), current_center_grid_row, col_map['CS'], 1, 4) 
                 current_center_grid_row += 1 
                 
             # 3번 구역 간격
             if i < len(central_combined_blocks) - 1:
-                 vbox_table.addItem(QSpacerItem(0, V_GAP_SMALL, QSizePolicy.Fixed, QSizePolicy.Fixed))
+                 vbox_table.addItem(QSpacerItem(0, V_GAP_LARGE, QSizePolicy.Fixed, QSizePolicy.Fixed))
             else:
-                 vbox_table.addItem(QSpacerItem(0, V_GAP_SMALL, QSizePolicy.Fixed, QSizePolicy.Fixed))
+                 vbox_table.addItem(QSpacerItem(0, V_GAP_LARGE, QSizePolicy.Fixed, QSizePolicy.Fixed))
 
         # 하단 (3-5 ~ 3-10)
         seats_3_x_lower = {
@@ -522,10 +662,10 @@ class ReadingRoom1SeatMapPage(BasePage):
         
         seats_lower_names = list(seats_3_x_lower.keys())
         for i, (name, seats) in enumerate(seats_3_x_lower.items()):
-            vbox_table.addWidget(create_zig_zag_block_6col(seats, self._show_reservation_popup, seat_statuses), Qt.AlignTop)
+            vbox_table.addWidget(self._create_zig_zag_block_6col(seats, self._show_reservation_popup, seat_statuses), Qt.AlignTop)
             
             if i < len(seats_lower_names) - 1:
-                vbox_table.addItem(QSpacerItem(0, V_GAP_SMALL, QSizePolicy.Fixed, QSizePolicy.Fixed))
+                vbox_table.addItem(QSpacerItem(0, V_GAP_LARGE, QSizePolicy.Fixed, QSizePolicy.Fixed))
         
         vbox_table.addStretch(1) 
 
@@ -567,26 +707,26 @@ class ReadingRoom1SeatMapPage(BasePage):
         # 4번 구역
         for i, (seats_odd, seats_even) in enumerate(q_groups):
             hbox_row = QHBoxLayout()
-            hbox_row.setSpacing(V_GAP_SMALL) 
+            hbox_row.setSpacing(V_GAP_LARGE) 
             
-            hbox_row.addLayout(create_zig_zag_block_4col_layout(seats_odd, self._show_reservation_popup, seat_statuses))
-            hbox_row.addLayout(create_zig_zag_block_3col_layout(seats_even, self._show_reservation_popup, seat_statuses))
+            hbox_row.addLayout(self._create_zig_zag_block_4col_layout(seats_odd, self._show_reservation_popup, seat_statuses))
+            hbox_row.addLayout(self._create_zig_zag_block_3col_layout(seats_even, self._show_reservation_popup, seat_statuses))
             
             vbox_right.addLayout(hbox_row)
             
             if i < q_groups_count - 1:
-                vbox_right.addItem(QSpacerItem(0, V_GAP_SMALL, QSizePolicy.Fixed, QSizePolicy.Fixed))
+                vbox_right.addItem(QSpacerItem(0, V_GAP_LARGE, QSizePolicy.Fixed, QSizePolicy.Fixed))
         
         # 5번 구역
-        vbox_right.addItem(QSpacerItem(0, V_GAP_SMALL, QSizePolicy.Fixed, QSizePolicy.Fixed))
+        vbox_right.addItem(QSpacerItem(0, V_GAP_LARGE, QSizePolicy.Fixed, QSizePolicy.Fixed))
         
         seats_5_1_ordered = list(range(345, 353)) + list(range(353, 361))[::-1]
         seats_5_2_ordered = list(range(361, 369)) + list(range(369, 377))[::-1]
         
-        vbox_right.addWidget(create_zig_zag_block_8col(seats_5_1_ordered, self._show_reservation_popup, seat_statuses))
-        vbox_right.addItem(QSpacerItem(0, V_GAP_SMALL, QSizePolicy.Fixed, QSizePolicy.Fixed))
+        vbox_right.addWidget(self._create_zig_zag_block_8col(seats_5_1_ordered, self._show_reservation_popup, seat_statuses))
+        vbox_right.addItem(QSpacerItem(0, V_GAP_LARGE, QSizePolicy.Fixed, QSizePolicy.Fixed))
         
-        vbox_right.addWidget(create_zig_zag_block_8col(seats_5_2_ordered, self._show_reservation_popup, seat_statuses))
+        vbox_right.addWidget(self._create_zig_zag_block_8col(seats_5_2_ordered, self._show_reservation_popup, seat_statuses))
         vbox_right.addStretch(1) 
 
         # 최종 레이아웃 배치 (왼쪽 | 중앙 | 오른쪽)
@@ -599,5 +739,526 @@ class ReadingRoom1SeatMapPage(BasePage):
         
         main_vbox.addLayout(final_hbox)
         main_vbox.addStretch(1)
+
+
+# ----------------------------------------------------------------------
+# 제2-1열람실 배치도 페이지
+# ----------------------------------------------------------------------
+class ReadingRoom2_1SeatMapPage(BaseSeatMapPage):
+    def __init__(self, switch_callback, room_name=None):
+        super().__init__(switch_callback, room_name if room_name else "제2-1열람실")
         
-        container.setMinimumSize(1200, 2000)
+        self.seat_statuses = self.db.get_all_seat_statuses(room_id=2) # 제2-1열람실 데이터 로드
+        self._setup_common_ui(room_id=2)
+
+    def _create_seat_map_layout(self, container, seat_statuses):
+        """ 제2-1열람실 배치도 레이아웃 구성 """
+        main_vbox = QVBoxLayout(container)
+        main_vbox.setSpacing(0)
+        main_vbox.setContentsMargins(20, 20, 20, 20)
+        
+        V_GAP_SMALL = 20
+        V_GAP_LARGE = 40
+        
+        # ----------------------------------------------------
+        # 왼쪽 (1번) 구역
+        # ----------------------------------------------------
+
+        # 1-1 구역
+        block_1_1_container = QWidget()
+        vbox_1_1 = QVBoxLayout(block_1_1_container)
+        vbox_1_1.setSpacing(0)
+        vbox_1_1.setContentsMargins(0, 0, 0, 0)
+
+        # 상단
+        seats_1_1_A_L = list(range(1, 15))      
+        seats_1_1_A_R = list(range(36, 22, -1))
+        block_1_1_A = self._create_wall_block_2col(seats_1_1_A_L, seats_1_1_A_R, self._show_reservation_popup, seat_statuses)
+        vbox_1_1.addWidget(block_1_1_A)
+        vbox_1_1.addSpacing(V_GAP_LARGE)
+        
+        # 하단
+        seats_1_1_B_L = list(range(15, 19))
+        seats_1_1_B_R = list(range(22, 18, -1))
+        block_1_1_B = self._create_wall_block_2col(seats_1_1_B_L, seats_1_1_B_R, self._show_reservation_popup, seat_statuses)
+        vbox_1_1.addWidget(block_1_1_B)
+        
+        # 1-2 구역
+        block_1_2_container = QWidget()
+        vbox_1_2 = QVBoxLayout(block_1_2_container)
+        vbox_1_2.setSpacing(0)
+        vbox_1_2.setContentsMargins(0, 0, 0, 0)
+        
+        # 상단
+        seats_1_2_A_L = list(range(37, 51))
+        seats_1_2_A_R = list(range(72, 58, -1))
+        block_1_2_A = self._create_wall_block_2col(seats_1_2_A_L, seats_1_2_A_R, self._show_reservation_popup, seat_statuses)
+        vbox_1_2.addWidget(block_1_2_A)
+        vbox_1_2.addSpacing(V_GAP_LARGE)
+
+        # 하단
+        seats_1_2_B_L = list(range(51, 55))
+        seats_1_2_B_R = list(range(58, 54, -1))
+        block_1_2_B = self._create_wall_block_2col(seats_1_2_B_L, seats_1_2_B_R, self._show_reservation_popup, seat_statuses)
+        vbox_1_2.addWidget(block_1_2_B)
+
+        # 배치
+        left_section_h_container = QWidget()
+        left_section_h_layout = QHBoxLayout(left_section_h_container)
+        left_section_h_layout.setContentsMargins(0, 0, 0, 0)
+        left_section_h_layout.setSpacing(V_GAP_LARGE)
+        
+        left_section_h_layout.addWidget(block_1_1_container)
+        left_section_h_layout.addWidget(block_1_2_container)
+
+        left_section = QWidget()
+        vbox_left = QVBoxLayout(left_section)
+        vbox_left.setContentsMargins(0, 0, 0, 0)
+        vbox_left.addWidget(left_section_h_container)
+        vbox_left.addStretch(1) 
+        
+        # ----------------------------------------------------
+        # 중앙 (2, 3번) 구역
+        # ----------------------------------------------------
+        
+        center_section = QWidget()
+        hbox_center = QHBoxLayout(center_section) 
+        hbox_center.setSpacing(V_GAP_LARGE) # 구역 간 수평 간격
+        hbox_center.setContentsMargins(0, 0, 0, 0)
+        
+        # 2번 구역
+        block_2_1_container = QWidget()
+        vbox_2_1 = QVBoxLayout(block_2_1_container)
+        vbox_2_1.setSpacing(0) 
+        vbox_2_1.setContentsMargins(0, 0, 0, 0)
+        
+        # 상단
+        seats_2_1_A_L = list(range(73, 81))       
+        seats_2_1_A_R = list(range(102, 94, -1))  
+        block_2_1_A = self._create_wall_block_2col(seats_2_1_A_L, seats_2_1_A_R, self._show_reservation_popup, seat_statuses)
+        vbox_2_1.addWidget(block_2_1_A)
+        vbox_2_1.addSpacing(V_GAP_LARGE) 
+
+        # 하단
+        seats_2_1_B_L = list(range(81, 88))       
+        seats_2_1_B_R = list(range(94, 87, -1))   
+        block_2_1_B = self._create_wall_block_2col(seats_2_1_B_L, seats_2_1_B_R, self._show_reservation_popup, seat_statuses)
+        vbox_2_1.addWidget(block_2_1_B)
+        vbox_2_1.addStretch(1) 
+
+        # 3-1 구역
+        block_3_1_container = QWidget()
+        vbox_3_1 = QVBoxLayout(block_3_1_container)
+        vbox_3_1.setSpacing(0)
+        vbox_3_1.setContentsMargins(0, 0, 0, 0)
+
+        # 상단
+        seats_3_1_A_L = list(range(103, 117))
+        seats_3_1_A_R = list(range(140, 126, -1))
+        block_3_1_A = self._create_wall_block_2col(seats_3_1_A_L, seats_3_1_A_R, self._show_reservation_popup, seat_statuses)
+        vbox_3_1.addWidget(block_3_1_A)
+        vbox_3_1.addSpacing(V_GAP_LARGE) 
+        
+        # 하단
+        seats_3_1_B_L = list(range(117, 122))
+        seats_3_1_B_R = list(range(126, 121, -1))
+        block_3_1_B = self._create_wall_block_2col(seats_3_1_B_L, seats_3_1_B_R, self._show_reservation_popup, seat_statuses)
+        vbox_3_1.addWidget(block_3_1_B)
+        vbox_3_1.addStretch(1)
+        
+        # 3-2 구역
+        block_3_2_container = QWidget()
+        vbox_3_2 = QVBoxLayout(block_3_2_container)
+        vbox_3_2.setSpacing(0)
+        vbox_3_2.setContentsMargins(0, 0, 0, 0)
+
+        # 상단
+        seats_3_2_A_L = list(range(141, 155))
+        seats_3_2_A_R = list(range(178, 164, -1))
+        block_3_2_A = self._create_wall_block_2col(seats_3_2_A_L, seats_3_2_A_R, self._show_reservation_popup, seat_statuses)
+        vbox_3_2.addWidget(block_3_2_A)
+        vbox_3_2.addSpacing(V_GAP_LARGE) 
+
+        # 하단
+        seats_3_2_B_L = list(range(155, 160))
+        seats_3_2_B_R = list(range(164, 159, -1))
+        block_3_2_B = self._create_wall_block_2col(seats_3_2_B_L, seats_3_2_B_R, self._show_reservation_popup, seat_statuses)
+        vbox_3_2.addWidget(block_3_2_B)
+        vbox_3_2.addStretch(1)
+
+        # 배치
+        hbox_center.addWidget(block_2_1_container)
+        hbox_center.addWidget(block_3_1_container)
+        hbox_center.addWidget(block_3_2_container)
+        
+        # ----------------------------------------------------
+        # 오른쪽 (4, 5, 6번) 구역
+        # ----------------------------------------------------
+        
+        right_section = QWidget()
+        vbox_right = QVBoxLayout(right_section)
+        vbox_right.setSpacing(V_GAP_SMALL) # 구역 간 수직 간격
+        vbox_right.setContentsMargins(0, 0, 0, 0)
+
+        # 4번 구역
+        grid_4_1 = QGridLayout()
+        seats_4_1 = list(range(179, 185)) 
+        for i, seat_id in enumerate(seats_4_1):
+            grid_4_1.addWidget(self._create_seat_btn(seat_id, self._show_reservation_popup, seat_statuses), 0, i)
+        vbox_right.addWidget(self._wrap_and_center_grid(grid_4_1))
+        vbox_right.addSpacing(V_GAP_SMALL)
+
+        # 5-1 구역
+        seats_5_1_row1 = list(range(192, 184, -1)) 
+        seats_5_1_row2 = list(range(193, 201)) 
+        vbox_right.addWidget(self._create_zig_zag_block_8col(seats_5_1_row1 + seats_5_1_row2, self._show_reservation_popup, seat_statuses))
+        vbox_right.addSpacing(V_GAP_SMALL)
+        
+        # 5-2 구역
+        seats_5_2_row1 = list(range(208, 200, -1)) 
+        seats_5_2_row2 = list(range(209, 217)) 
+        vbox_right.addWidget(self._create_zig_zag_block_8col(seats_5_2_row1 + seats_5_2_row2, self._show_reservation_popup, seat_statuses))
+        vbox_right.addSpacing(V_GAP_SMALL)
+
+        # 5-3 구역
+        seats_5_3_row1 = list(range(224, 216, -1)) 
+        seats_5_3_row2 = list(range(225, 233)) 
+        vbox_right.addWidget(self._create_zig_zag_block_8col(seats_5_3_row1 + seats_5_3_row2, self._show_reservation_popup, seat_statuses))
+        vbox_right.addSpacing(V_GAP_SMALL)
+
+        # 5-4 구역
+        seats_5_4_row1 = list(range(240, 232, -1)) 
+        seats_5_4_row2 = list(range(241, 249)) 
+        vbox_right.addWidget(self._create_zig_zag_block_8col(seats_5_4_row1 + seats_5_4_row2, self._show_reservation_popup, seat_statuses))
+        vbox_right.addSpacing(V_GAP_SMALL)
+
+        # 5-5 구역
+        seats_5_5_row1 = list(range(256, 248, -1)) 
+        seats_5_5_row2 = list(range(257, 265)) 
+        vbox_right.addWidget(self._create_zig_zag_block_8col(seats_5_5_row1 + seats_5_5_row2, self._show_reservation_popup, seat_statuses))
+        vbox_right.addSpacing(V_GAP_SMALL)
+
+        # 6번 구역
+        grid_6_1 = QGridLayout()
+        seats_6_1 = list(range(270, 264, -1)) 
+        for i, seat_id in enumerate(seats_6_1):
+            grid_6_1.addWidget(self._create_seat_btn(seat_id, self._show_reservation_popup, seat_statuses), 0, i)
+        vbox_right.addWidget(self._wrap_and_center_grid(grid_6_1))
+        vbox_right.addStretch(1)
+        
+        # ----------------------------------------------------
+        # 최종 레이아웃 배치
+        # ----------------------------------------------------
+        
+        final_hbox = QHBoxLayout()
+        final_hbox.setSpacing(V_GAP_LARGE) 
+        final_hbox.addWidget(left_section, 0) 
+        final_hbox.addWidget(center_section, 0)
+        final_hbox.addWidget(right_section, 1)
+        final_hbox.addStretch(1)
+        
+        main_vbox.addLayout(final_hbox)
+        main_vbox.addStretch(1)
+
+
+# ----------------------------------------------------------------------
+# 제2-2열람실 배치도 페이지
+# ----------------------------------------------------------------------
+class ReadingRoom2_2SeatMapPage(BaseSeatMapPage):
+    def __init__(self, switch_callback, room_name=None):
+        super().__init__(switch_callback, room_name if room_name else "제2-2열람실")
+        
+        self.seat_statuses = self.db.get_all_seat_statuses(room_id=3) # 제2-2열람실 데이터 로드
+        self._setup_common_ui(room_id=3)
+
+    def _create_seat_map_layout(self, container, seat_statuses):
+        """ 제2-2열람실 배치도 레이아웃 구성 """
+        main_vbox = QVBoxLayout(container)
+        main_vbox.setSpacing(0)
+        main_vbox.setContentsMargins(20, 20, 20, 20)
+        
+        V_GAP_SMALL = 20
+        V_GAP_LARGE = 40 
+        
+        # ----------------------------------------------------
+        # 1번 구역
+        # ----------------------------------------------------
+
+        block_1_1_container = QWidget()
+        block_1_1_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        vbox_1_1_main = QVBoxLayout(block_1_1_container)
+        vbox_1_1_main.setSpacing(V_GAP_SMALL)
+        vbox_1_1_main.setContentsMargins(0, 0, 0, 0)
+        
+        # 상단
+        seats_1_1_A1_L = list(range(1, 3))     
+        seats_1_1_A1_R = list(range(28, 26, -1)) 
+        block_1_1_A_top1 = self._create_wall_block_2col(seats_1_1_A1_L, seats_1_1_A1_R, self._show_reservation_popup, seat_statuses)
+        vbox_1_1_main.addWidget(block_1_1_A_top1)
+        vbox_1_1_main.addSpacing(V_GAP_SMALL)
+        
+        # 중간
+        seats_1_1_A2_L = list(range(3, 7))
+        seats_1_1_A2_R = list(range(26, 22, -1))
+        block_1_1_A_top2 = self._create_wall_block_2col(seats_1_1_A2_L, seats_1_1_A2_R, self._show_reservation_popup, seat_statuses)
+        vbox_1_1_main.addWidget(block_1_1_A_top2)
+
+        # 하단 시작점 위치 조정
+        HEIGHT_ADJUSTMENT = scale_value(76)
+        vbox_1_1_main.addItem(QSpacerItem(0, HEIGHT_ADJUSTMENT, QSizePolicy.Fixed, QSizePolicy.Fixed))
+        
+        # 하단
+        seats_1_1_B_L = list(range(7, 15))
+        seats_1_1_B_R = list(range(22, 14, -1))
+        block_1_1_A_bottom = self._create_wall_block_2col(seats_1_1_B_L, seats_1_1_B_R, self._show_reservation_popup, seat_statuses)
+        vbox_1_1_main.addWidget(block_1_1_A_bottom)
+        vbox_1_1_main.addStretch(1)
+
+        # ----------------------------------------------------
+        # 2번 구역
+        # ----------------------------------------------------
+
+        block_2_x_container = QWidget()
+        block_2_x_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        vbox_2_x = QVBoxLayout(block_2_x_container)
+        vbox_2_x.setSpacing(V_GAP_SMALL)
+        vbox_2_x.setContentsMargins(0, 0, 0, 0)
+        
+        # 상단
+        seats_2_1_A_L = list(range(29, 31))
+        seats_2_1_A_R = list(range(60, 58, -1))
+        block_2_1_A = self._create_wall_block_2col(seats_2_1_A_L, seats_2_1_A_R, self._show_reservation_popup, seat_statuses)
+        vbox_2_x.addWidget(block_2_1_A)
+        vbox_2_x.addSpacing(V_GAP_SMALL) 
+
+        # 중간
+        seats_2_1_B_L = list(range(31, 37))
+        seats_2_1_B_R = list(range(58, 52, -1))
+        block_2_1_B = self._create_wall_block_2col(seats_2_1_B_L, seats_2_1_B_R, self._show_reservation_popup, seat_statuses)
+        vbox_2_x.addWidget(block_2_1_B)
+        vbox_2_x.addSpacing(V_GAP_SMALL)
+
+        # 하단
+        seats_2_2_L = list(range(37, 45))
+        seats_2_2_R = list(range(52, 44, -1)) 
+        block_2_2 = self._create_wall_block_2col(seats_2_2_L, seats_2_2_R, self._show_reservation_popup, seat_statuses)
+        vbox_2_x.addWidget(block_2_2)
+        vbox_2_x.addStretch(1)
+
+        # ----------------------------------------------------
+        # 3번 구역
+        # ----------------------------------------------------
+
+        block_3_x_container = QWidget()
+        block_3_x_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        vbox_3_x = QVBoxLayout(block_3_x_container)
+        vbox_3_x.setSpacing(V_GAP_SMALL)
+        vbox_3_x.setContentsMargins(0, 0, 0, 0)
+        
+        # 상단
+        seats_3_1_A_L = list(range(61, 63))
+        seats_3_1_A_R = list(range(84, 82, -1))
+        block_3_1_A = self._create_wall_block_2col(seats_3_1_A_L, seats_3_1_A_R, self._show_reservation_popup, seat_statuses)
+        vbox_3_x.addWidget(block_3_1_A)
+        vbox_3_x.addSpacing(V_GAP_SMALL)
+        
+        # 하단
+        seats_3_1_B_L = list(range(63, 67))
+        seats_3_1_B_R = list(range(82, 78, -1))
+        block_3_1_B = self._create_wall_block_2col(seats_3_1_B_L, seats_3_1_B_R, self._show_reservation_popup, seat_statuses)
+        vbox_3_x.addWidget(block_3_1_B)
+        vbox_3_x.addStretch(1)
+        
+        # ----------------------------------------------------
+        # 4번 구역
+        # ----------------------------------------------------
+
+        block_4_x_container = QWidget()
+        block_4_x_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        hbox_4_x = QHBoxLayout(block_4_x_container) 
+        hbox_4_x.setSpacing(V_GAP_LARGE)
+        hbox_4_x.setContentsMargins(0, 0, 0, 0)
+        
+        # 4-1
+        block_4_1_container = QWidget()
+        vbox_4_1 = QVBoxLayout(block_4_1_container)
+        vbox_4_1.setSpacing(0)
+        vbox_4_1.setContentsMargins(0, 0, 0, 0)
+        
+        # 상단
+        seats_4_1_A_L = list(range(85, 87))
+        seats_4_1_A_R = list(range(112, 110, -1))
+        block_4_1_A = self._create_wall_block_2col(seats_4_1_A_L, seats_4_1_A_R, self._show_reservation_popup, seat_statuses)
+        vbox_4_1.addWidget(block_4_1_A)
+        vbox_4_1.addSpacing(V_GAP_LARGE) 
+        
+        # 하단
+        seats_4_1_B_L = list(range(87, 93))
+        seats_4_1_B_R = list(range(110, 104, -1))
+        block_4_1_B = self._create_wall_block_2col(seats_4_1_B_L, seats_4_1_B_R, self._show_reservation_popup, seat_statuses)
+        vbox_4_1.addWidget(block_4_1_B)
+        vbox_4_1.addStretch(1)
+        hbox_4_x.addWidget(block_4_1_container)
+        
+        # 4-2
+        block_4_2_container = QWidget()
+        vbox_4_2 = QVBoxLayout(block_4_2_container)
+        vbox_4_2.setSpacing(0)
+        vbox_4_2.setContentsMargins(0, 0, 0, 0)
+
+        # 상단
+        seats_4_2_A_L = list(range(113, 115))
+        seats_4_2_A_R = list(range(144, 142, -1))
+        block_4_2_A = self._create_wall_block_2col(seats_4_2_A_L, seats_4_2_A_R, self._show_reservation_popup, seat_statuses)
+        vbox_4_2.addWidget(block_4_2_A)
+        vbox_4_2.addSpacing(V_GAP_LARGE) 
+        
+        # 하단
+        seats_4_2_B_L = list(range(115, 121))
+        seats_4_2_B_R = list(range(142, 136, -1))
+        block_4_2_B = self._create_wall_block_2col(seats_4_2_B_L, seats_4_2_B_R, self._show_reservation_popup, seat_statuses)
+        vbox_4_2.addWidget(block_4_2_B)
+        vbox_4_2.addStretch(1) 
+        hbox_4_x.addWidget(block_4_2_container)
+        
+        # ----------------------------------------------------
+        # 5번 구역
+        # ----------------------------------------------------
+
+        block_5_x_container = QWidget()
+        vbox_5_x = QVBoxLayout(block_5_x_container)
+        vbox_5_x.setSpacing(0)
+        vbox_5_x.setContentsMargins(0, 0, 0, 0)
+        
+        # 5-1
+        seats_5_1_row1 = list(range(145, 153))
+        seats_5_1_row2 = list(range(160, 152, -1))
+        block_5_1 = self._create_zig_zag_block_8col(seats_5_1_row1 + seats_5_1_row2, self._show_reservation_popup, seat_statuses)
+        vbox_5_x.addWidget(block_5_1)
+        vbox_5_x.addSpacing(V_GAP_LARGE)
+
+        # 5-2
+        seats_5_2_row1 = list(range(161, 169))
+        seats_5_2_row2 = list(range(176, 168, -1)) 
+        block_5_2 = self._create_zig_zag_block_8col(seats_5_2_row1 + seats_5_2_row2, self._show_reservation_popup, seat_statuses)
+        vbox_5_x.addWidget(block_5_2)
+        vbox_5_x.addStretch(1)
+
+        # ----------------------------------------------------
+        # 최종 레이아웃 배치
+        # ----------------------------------------------------
+
+        top_h_container = QWidget()
+        top_hbox = QHBoxLayout(top_h_container)
+        top_hbox.setSpacing(V_GAP_LARGE)    # 구역 간 수평 간격
+        top_hbox.setContentsMargins(0, 0, 0, 0)
+        
+        top_hbox.addWidget(block_1_1_container) 
+        top_hbox.addWidget(block_2_x_container) 
+        top_hbox.addWidget(block_3_x_container)
+        top_hbox.addWidget(block_4_x_container)
+        top_hbox.addWidget(block_5_x_container)
+        
+        main_vbox.addWidget(top_h_container)
+        main_vbox.addStretch(1)
+
+
+# ----------------------------------------------------------------------
+# 제2-2열람실 (대학원생 전용) 배치도 페이지
+# ----------------------------------------------------------------------
+class ReadingRoom2_2GradSeatMapPage(BaseSeatMapPage):
+    def __init__(self, switch_callback, room_name=None):
+        grad_room_name = "제2-2열람실\n(대학원생 전용)"
+        super().__init__(switch_callback, room_name if room_name else grad_room_name)
+
+        self.seat_statuses = self.db.get_all_seat_statuses(room_id=4) # room_id=4 로드
+        self._setup_common_ui(room_id=4)
+
+    def _create_seat_map_layout(self, container, seat_statuses):
+        main_vbox = QVBoxLayout(container)
+        main_vbox.setSpacing(0)
+        main_vbox.setContentsMargins(20, 20, 20, 20)
+        
+        V_GAP_SMALL = 20
+        V_GAP_LARGE = 40
+        
+        # ----------------------------------------------------
+        # 메인 수평 컨테이너 (1번 | 2번 | 캐럴)
+        # ----------------------------------------------------
+        
+        main_h_container = QWidget()
+        main_hbox = QHBoxLayout(main_h_container)
+        main_hbox.setSpacing(V_GAP_LARGE)
+        main_hbox.setContentsMargins(0, 0, 0, 0)
+        
+        # 캐럴 구역
+        carrel_container = QWidget()
+        vbox_carrel = QVBoxLayout(carrel_container)
+        vbox_carrel.setSpacing(V_GAP_SMALL)
+        vbox_carrel.setContentsMargins(0, 0, 0, 0)
+        
+        # 캐럴 좌석 ID 할당
+        carrel_seat_ids = list(range(193, 199)) 
+        
+        # 캐럴 버튼 크기
+        CARREL_BTN_W = scale_value(45)
+        CARREL_BTN_H = scale_value(30)
+        
+        # 캐럴 버튼 생성 및 이벤트 연결
+        for i, seat_id in enumerate(carrel_seat_ids):
+            current_status = seat_statuses.get(seat_id, "available")
+            
+            btn = SeatButton(seat_id, current_status=current_status)
+            btn.setFixedSize(CARREL_BTN_W, CARREL_BTN_H)
+            btn.setText(f"캐럴{6 - i}") 
+            btn.setFont(QFont("Arial", 10, QFont.Bold))
+            btn.clicked.connect(lambda checked, s=seat_id: self._show_reservation_popup(s))
+
+            vbox_carrel.addWidget(btn)
+
+        vbox_carrel.addStretch(1)
+        
+        # 1, 2번 구역
+        seat_blocks_container = QWidget()
+        seat_blocks_hbox = QHBoxLayout(seat_blocks_container)
+        seat_blocks_hbox.setSpacing(V_GAP_LARGE)
+        seat_blocks_hbox.setContentsMargins(0, 0, 0, 0)
+        
+        # 1-1
+        seats_1_1_L = list(range(67, 73))
+        seats_1_1_R = list(range(78, 72, -1))
+        block_1_1 = self._create_wall_block_2col(seats_1_1_L, seats_1_1_R, self._show_reservation_popup, seat_statuses)
+        
+        # 1-2
+        seats_1_2_L = list(range(93, 99))
+        seats_1_2_R = list(range(104, 98, -1))
+        block_1_2 = self._create_wall_block_2col(seats_1_2_L, seats_1_2_R, self._show_reservation_popup, seat_statuses)
+
+        # 2-1
+        seats_2_1_L = list(range(121, 129))
+        seats_2_1_R = list(range(136, 128, -1))
+        block_2_1 = self._create_wall_block_2col(seats_2_1_L, seats_2_1_R, self._show_reservation_popup, seat_statuses)
+
+        # 2-2
+        seats_2_2_L = list(range(177, 185))
+        seats_2_2_R = list(range(192, 184, -1))
+        block_2_2 = self._create_wall_block_2col(seats_2_2_L, seats_2_2_R, self._show_reservation_popup, seat_statuses)
+        
+        seat_blocks_hbox.addWidget(block_1_1, alignment=Qt.AlignTop)
+        seat_blocks_hbox.addWidget(block_1_2, alignment=Qt.AlignTop)
+        
+        seat_blocks_hbox.addWidget(block_2_1, alignment=Qt.AlignTop)
+        seat_blocks_hbox.addWidget(block_2_2, alignment=Qt.AlignTop)
+        seat_blocks_hbox.addStretch(1) 
+        
+        # 1번 | 2번 | 캐럴
+        main_hbox.addWidget(seat_blocks_container)
+        main_hbox.addWidget(carrel_container, alignment=Qt.AlignTop) 
+        main_hbox.addStretch(1)
+
+        # ----------------------------------------------------
+        # 최종 레이아웃 배치
+        # ----------------------------------------------------
+        
+        main_vbox.addWidget(main_h_container)
+        main_vbox.addStretch(1)

@@ -15,8 +15,8 @@ REF_W = 500
 REF_H = 800
 
 # 타겟 해상도
-TARGET_W_MAIN = 800
-TARGET_H_MAIN = 1280
+TARGET_W_MAIN = 625
+TARGET_H_MAIN = 1000
 
 # 스케일 팩터: 타겟 / 기준
 TARGET_SCALE_FACTOR = TARGET_W_MAIN / REF_W 
@@ -290,6 +290,7 @@ class CustomAlertDialog(QDialog):
         label = QLabel(dialog_body)
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignCenter)
+        label.setTextFormat(Qt.RichText)
         label.setStyleSheet("color: white; font-size: 14px; font-weight: 500;")
         inner_layout.addWidget(label)
         
