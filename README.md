@@ -16,6 +16,22 @@ kiosk_gate/
 │   ├── enrollment_input_page.py    	 	 # 등록 전 학생 정보 (이름/학번) 입력 받는 페이지
 │   ├── enrollment_start_page.py    		 # 촬영 유의사항 안내 페이지
 │   ├── enrollment_recording_page.py     # 3단계 촬영 진행 페이지
+├── backend/
+│   ├── database.py                     # DB 관련 함수
+│   ├── main.py                         # 나중에 변경할 예정
+│   ├── requirement.txt                 # 필요한 기능 설치
+│   ├── assets/
+│   │   ├── OnePassDB.db                # DB 테이블
+│   │   ├── init.sql                    # SQL 테이블
+│   ├── back/
+│   │   ├── api/
+│   │   │   ├── access_api.py           # 출입 관련 API
+│   │   │   ├── seat_api.py             # 좌석 예약 API
+│   │   │   ├── user_api.py             # 학생 정보 관련 API
+│   │   ├── services/
+│   │   │   ├── core_service.py         # API 핵심 내부 함수
+│   │   ├── utils/
+│   │   │   ├── helper_function.py      # API 공통 내부 함수
 └── resources/             	 	           # 이미지, 아이콘 파일
 ```
 
