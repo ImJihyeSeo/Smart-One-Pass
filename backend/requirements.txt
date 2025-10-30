@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pydantic
+
+pip install -r requirements.txt
+을 통해서 설치할 것

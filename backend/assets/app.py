@@ -1,0 +1,1 @@
+sqlite3 mydb.db < init.sql
