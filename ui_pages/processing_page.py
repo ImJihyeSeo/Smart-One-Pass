@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QAbstractAnimation, QEasingCurve, QSequentialAnimationGroup
 from PySide6.QtGui import QPixmap, QImage, QPainter, QBitmap, QColor
 
-from ui_style import TARGET_W, TARGET_H, MESSAGE_AREA_HEIGHT, BORDER_RADIUS, scale_qsize, scale_value
+from ui_style import TARGET_W, TARGET_H, MESSAGE_AREA_HEIGHT, BORDER_RADIUS, GUIDE_STYLE
 from cv_tools import detect_faces
 from .base_page import BasePage
 
@@ -53,7 +53,7 @@ class ProcessingPage(BasePage):
         """)
 
         # 가이드라인
-        GUIDE_IMAGE_SIZE = scale_value(130)
+        GUIDE_IMAGE_SIZE = 220
 
         self.guide_image_label = QLabel(self.video_label) # video_label을 부모로 설정
         self.guide_image_label.setFixedSize(GUIDE_IMAGE_SIZE, GUIDE_IMAGE_SIZE)
@@ -100,8 +100,8 @@ class ProcessingPage(BasePage):
 
         # 입체감 부여
         shadow = QGraphicsDropShadowEffect(self.video_label)
-        shadow.setBlurRadius(20)
-        shadow.setOffset(0, 8)
+        shadow.setBlurRadius(50)
+        shadow.setOffset(0, 10)
         shadow.setColor(QColor(0, 0, 0, 100))
         self.video_label.setGraphicsEffect(shadow)     
 
@@ -113,9 +113,9 @@ class ProcessingPage(BasePage):
         message_layout = QVBoxLayout(self.message_container)
         message_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.instruction = QLabel("얼굴 인식을 시작하려면 화면을 바라봐주세요.")
+        self.instruction = QLabel("※ 얼굴 인식을 시작하려면 화면을 바라봐주세요 ※")
         self.instruction.setAlignment(Qt.AlignCenter)
-        self.instruction.setStyleSheet("font-size: 22px; color: #ffffff; background: transparent;")
+        self.instruction.setStyleSheet(GUIDE_STYLE)
         
         message_layout.addWidget(self.instruction)
         
@@ -216,7 +216,7 @@ class ProcessingPage(BasePage):
                 self.guide_animation.stop()
             self.guide_opacity_effect.setOpacity(1.0) 
             self.start_time = None
-            self.instruction.setText("얼굴 인식을 시작하려면 화면을 바라봐주세요.")
+            self.instruction.setText("※ 얼굴 인식을 시작하려면 화면을 바라봐주세요 ※")
             self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(0, 0, 0, 80); border-radius: {self.BORDER_RADIUS}px; }}")
 
         # QPixmap으로 변환

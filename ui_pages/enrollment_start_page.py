@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap, QPainter
-from ui_style import BUTTON_STYLE, TITLE_STYLE, GUIDE_STYLE, scale_value, scale_qsize
+from ui_style import BUTTON_STYLE, TITLE_STYLE, GUIDE_STYLE, LABEL_STYLE
 from .base_page import BasePage
 
 class EnrollmentStartPage(BasePage):
@@ -13,32 +13,32 @@ class EnrollmentStartPage(BasePage):
 
         main_layout = self.get_content_layout()
         main_layout.setAlignment(Qt.AlignTop)
-        main_layout.addSpacing(scale_value(40))
+        main_layout.addSpacing(40)
                 
         # 시작 안내
         title_label = QLabel("얼굴 등록을 시작합니다!")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet(TITLE_STYLE)
         main_layout.addWidget(title_label)
-        main_layout.addSpacing(scale_value(30))
+        main_layout.addSpacing(40)
         
         # 유의사항 안내
         guidance_box = QFrame()
         guidance_box.setStyleSheet("""
             QFrame {
-                background-color: #1a1a1a;
+                background-color: #242424;
                 border-radius: 12px;
-                padding: 10px;
+                padding: 0px 15px;
             }
         """)
-        guidance_box.setFixedWidth(scale_value(400))
+        guidance_box.setFixedSize(700, 530)
         guidance_layout = QVBoxLayout(guidance_box)
         guidance_layout.setAlignment(Qt.AlignCenter)
-        guidance_layout.setSpacing(5)
+        guidance_layout.setSpacing(10)
         guidance_layout.setContentsMargins(10, 10, 10, 10)
 
-        guidance_title = QLabel("촬영 시 유의사항")
-        guidance_title.setStyleSheet("font-size: 20px; color: white;")
+        guidance_title = QLabel("촬영시 유의사항")
+        guidance_title.setStyleSheet("font-size: 34px; color: white;")
         guidance_title.setAlignment(Qt.AlignCenter)
 
         guidance_text_1 = QLabel("정확한 인증을 위해 총 3단계의 촬영이 진행됩니다.")
@@ -48,17 +48,19 @@ class EnrollmentStartPage(BasePage):
             "몸은 고정하고 고개만 움직여주세요."
         )
         guidance_text_1.setAlignment(Qt.AlignCenter)
-        guidance_text_1.setStyleSheet(GUIDE_STYLE)
+        guidance_text_1.setStyleSheet(LABEL_STYLE)
         guidance_text_2.setAlignment(Qt.AlignCenter)
-        guidance_text_2.setStyleSheet(GUIDE_STYLE)
+        guidance_text_2.setStyleSheet(LABEL_STYLE)
 
         guidance_layout.addWidget(guidance_title)
+        guidance_layout.addSpacing(10)
         guidance_layout.addWidget(guidance_text_1)
         guidance_layout.addWidget(guidance_text_2)
+        guidance_layout.addSpacing(20)
 
         # 금지 이미지
         IMAGE_BASE_PATH = "resources/"
-        IMAGE_SIZE = scale_qsize(QSize(90, 90))
+        IMAGE_SIZE = QSize(160, 140)
 
         prohibit_glasses = self.create_prohibit_overlay(
             base_image_path=IMAGE_BASE_PATH + "glasses.png",
@@ -92,7 +94,7 @@ class EnrollmentStartPage(BasePage):
         guidance_container.addStretch(1)
 
         main_layout.addLayout(guidance_container)
-        main_layout.addSpacing(40)
+        main_layout.addSpacing(60)
 
         # 버튼
         start_btn = QPushButton("촬영 시작하기")

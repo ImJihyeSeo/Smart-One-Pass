@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from .base_page import BasePage
-from ui_style import BUTTON_STYLE, INPUT_STYLE, LABEL_STYLE, TITLE_STYLE, GUIDE_STYLE, CustomAlertDialog, scale_value
+from ui_style import BUTTON_STYLE, INPUT_STYLE, LABEL_STYLE, TITLE_STYLE, GUIDE_STYLE, CustomAlertDialog
 
 class EnrollmentInputPage(BasePage):
     def __init__(self, switch_callback):
@@ -13,7 +13,7 @@ class EnrollmentInputPage(BasePage):
 
         main_layout = self.get_content_layout()
         main_layout.setAlignment(Qt.AlignTop)
-        main_layout.addSpacing(scale_value(40))
+        main_layout.addSpacing(70)
 
         # 안내 텍스트
         title_label = QLabel("얼굴 등록을 위해\n이름과 학번을 입력해주세요")
@@ -23,19 +23,19 @@ class EnrollmentInputPage(BasePage):
         
         guide_label = QLabel("입력하신 정보는 얼굴 인식 시스템 등록을 위해서만 사용됩니다")
         guide_label.setAlignment(Qt.AlignCenter)
-        guide_label.setStyleSheet(GUIDE_STYLE)
+        guide_label.setStyleSheet(LABEL_STYLE)
         main_layout.addWidget(guide_label)
         
-        main_layout.addSpacing(scale_value(40))
+        main_layout.addSpacing(60)
 
         # 중앙 입력 폼 감싸는 컨테이너
         input_container_frame = QFrame()
-        input_container_frame.setFixedWidth(scale_value(350))
+        input_container_frame.setFixedSize(580, 350)
         input_container_frame.setStyleSheet("""
             QFrame {
-                background-color: #1a1a1a;
-                border-radius: 12px;
-                padding: 20px 20px;
+                background-color: #242424;
+                border-radius: 20px;
+                padding: 30px 50px;
             }
         """)
         
@@ -90,7 +90,7 @@ class EnrollmentInputPage(BasePage):
         start_btn.clicked.connect(self.validate_and_switch)
         
         button_layout = QHBoxLayout()
-        button_layout.setContentsMargins(0, scale_value(30), 0, scale_value(30))         
+        button_layout.setContentsMargins(0, 50, 0, 50)         
         button_layout.addStretch(1)
         button_layout.addWidget(start_btn)
         button_layout.addStretch(1)
@@ -104,7 +104,7 @@ class EnrollmentInputPage(BasePage):
         if buttons is None:
             buttons = [{'text': '확인', 'style': 'confirm', 'callback': None}  ]
             
-        dialog = CustomAlertDialog(info_message, self, buttons=buttons, width=300)
+        dialog = CustomAlertDialog(info_message, self, buttons=buttons, width=450)
         dialog.exec()
 
     def validate_and_switch(self):
@@ -117,7 +117,7 @@ class EnrollmentInputPage(BasePage):
             return
 
         if not student_id or not student_id.isdigit() or len(student_id) != 8:
-            self._show_popup("입력 오류", "정확한 8자리 학번을 입력해 주세요.")
+            self._show_popup("입력 오류", "정확한 8자리 학번을<br>입력해 주세요.")
             return
 
         user_data = {"name": name, "student_id": student_id}

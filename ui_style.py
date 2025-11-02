@@ -9,43 +9,28 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QColor, QPainter, QPixmap, QMouseEvent
 
-# -------------------비율 계산------------------
-# 기준 해상도
-REF_W = 500
-REF_H = 800
 
 # 타겟 해상도
-TARGET_W_MAIN = 625
-TARGET_H_MAIN = 1000
-
-# 스케일 팩터: 타겟 / 기준
-TARGET_SCALE_FACTOR = TARGET_W_MAIN / REF_W 
-
-def scale_value(value):
-    return round(value * TARGET_SCALE_FACTOR)
-
-def scale_qsize(qsize):
-    return QSize(scale_value(qsize.width()), scale_value(qsize.height()))
-# ---------------------------------------------
+TARGET_W_MAIN = 800
+TARGET_H_MAIN = 1280
 
 # 메시지 영역 고정 높이
 MESSAGE_AREA_HEIGHT_REF = 100
-MESSAGE_AREA_HEIGHT = scale_value(MESSAGE_AREA_HEIGHT_REF)
+MESSAGE_AREA_HEIGHT = 160
 
 # 최대 재시도 횟수
 TOTAL_ATTEMPTS = 3
 
 # 웹캠 영상 크기 (ReadyPage, ProcessingPage 공통)
-TARGET_W_REF, TARGET_H_REF = 350, 520
-TARGET_W, TARGET_H = scale_value(TARGET_W_REF), scale_value(TARGET_H_REF)
+TARGET_W, TARGET_H = 500, 770
 
 # 둥근 모서리 반경
 BORDER_RADIUS_REF = 20
-BORDER_RADIUS = scale_value(BORDER_RADIUS_REF)
+BORDER_RADIUS = 30
 
 # 웹캠 화면 위치 조정 위한 상단 간격
 TOP_SPACING_REF = 30
-TOP_SPACING = scale_value(TOP_SPACING_REF)
+TOP_SPACING = 50
 
 # 얼굴 인식 유지 시간 (초)
 PROCESSING_DURATION = 3.0 
@@ -55,12 +40,12 @@ BUTTON_STYLE = """
     QPushButton {
         background-color: #3B6EEB;
         color: white; 
-        border-radius: 20px;
-        padding: 12px 25px;
-        font-size: 18px; 
+        border-radius: 30px;
+        padding: 15px 25px;
+        font-size: 28px; 
         font-weight: bold;
-        min-height: 20px;
-        min-width: 60px;
+        min-height: 30px;
+        min-width: 100px;
     }
     QPushButton:hover {
         background-color: #4A79F0;
@@ -72,12 +57,12 @@ CANCEL_BUTTON_STYLE = """
     QPushButton {
         background-color: #7f7f7f;
         color: white; 
-        border-radius: 20px;
-        padding: 12px 25px;
-        font-size: 18px; 
+        border-radius: 30px;
+        padding: 15px 25px;
+        font-size: 28px; 
         font-weight: bold;
-        min-height: 20px;
-        min-width: 60px;
+        min-height: 30px;
+        min-width: 100px;
     }
     QPushButton:hover {
         background-color: #9f9f9f;
@@ -99,21 +84,21 @@ ICON_BUTTON_STYLE = """
 """
 
 # 기본 라벨 스타일
-LABEL_STYLE = "color: #ffffff; font-size: 16px; margin: 0px; padding: 8px;"
+LABEL_STYLE = "color: #ffffff; font-size: 24px; margin: 0px; padding: 8px;"
 # 메인 안내 메시지
-TITLE_STYLE = "font-size: 30px; color: #ffffff; margin-bottom: 5px;"
+TITLE_STYLE = "font-size: 42px; color: #ffffff; margin-bottom: 5px;"
 # 서브 안내 메시지
-GUIDE_STYLE = "font-size: 16px; color: #ffffff;"
+GUIDE_STYLE = "font-size: 30px; color: #ffffff;"
 
 # 입력 필드 스타일
 INPUT_STYLE = """
     QLineEdit {
-        background-color: #333333;
+        background-color: #404040;
         color: #ffffff;
         border: none;
-        border-radius: 18px;
+        border-radius: 25px;
         padding: 10px;
-        font-size: 16px;
+        font-size: 24px;
     }
     QLineEdit:focus {
         border: 1px solid #4A90E2;
@@ -236,8 +221,8 @@ class CustomAlertDialog(QDialog):
         self.bg_widget = QLabel()
         self.bg_widget.setObjectName("glass")
         
-        # 너비: width 값 지정 -> 사용 / 미지정 -> 기본값 200px
-        final_width = width if width is not None else 200 
+        # 너비: width 값 지정 -> 사용 / 미지정 -> 기본값 400px
+        final_width = width if width is not None else 400 
         self.bg_widget.setFixedWidth(final_width) 
         
         self.bg_widget.setStyleSheet("""
@@ -259,39 +244,36 @@ class CustomAlertDialog(QDialog):
 
         # 내부 레이아웃
         inner_layout = QVBoxLayout(self.bg_widget)
-        inner_layout.setContentsMargins(25, 20, 25, 20)
-        inner_layout.setSpacing(5) 
+        inner_layout.setContentsMargins(40, 50, 40, 50)
+        inner_layout.setSpacing(20) 
 
         # 메시지 분리 - title / body / footer
         if isinstance(message, dict) and 'title' in message:
             dialog_title = message.get('title', '')
             dialog_body = message.get('body', '')
             dialog_footer = message.get('footer', '')
+            body_font_size = message.get('body_font_size', 26)
         else:
             dialog_title = ""
             dialog_body = message
             dialog_footer = ""
+            body_font_size = 26
 
 
         # 1. 상단 - title
         if dialog_title:
             title_label = QLabel(dialog_title)
             title_label.setAlignment(Qt.AlignCenter)
-            title_label.setStyleSheet("color: white; font-size: 16px; margin-bottom: 5px;")
+            title_label.setStyleSheet("color: white; font-size: 32px; background-color: transparent;")
             inner_layout.addWidget(title_label)
-            line = QFrame()
-            line.setFrameShape(QFrame.HLine)
-            line.setFrameShadow(QFrame.Sunken)
-            line.setStyleSheet("color: rgba(255, 255, 255, 0.4);")
-            inner_layout.addWidget(line)
-
+            inner_layout.addSpacing(20)
 
         # 2. 중앙 - body
         label = QLabel(dialog_body)
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignCenter)
         label.setTextFormat(Qt.RichText)
-        label.setStyleSheet("color: white; font-size: 14px; font-weight: 500;")
+        label.setStyleSheet(f"color: white; font-size: {body_font_size}px; font-weight: 500; background: transparent;")
         inner_layout.addWidget(label)
         
         # 3. 하단 - footer
@@ -300,7 +282,7 @@ class CustomAlertDialog(QDialog):
             footer_label = QLabel(dialog_footer)
             footer_label.setWordWrap(True)
             footer_label.setAlignment(Qt.AlignCenter)
-            footer_label.setStyleSheet("color: #aaaaaa; font-size: 12px;")
+            footer_label.setStyleSheet("background: transparent; font-size: 22px;")
             inner_layout.addWidget(footer_label)
 
         # 버튼
@@ -323,7 +305,7 @@ class CustomAlertDialog(QDialog):
 
         button_box.addStretch()
         
-        inner_layout.addSpacing(10)
+        inner_layout.addSpacing(20)
         inner_layout.addLayout(button_box)
         layout.addWidget(self.bg_widget)
 
@@ -363,11 +345,11 @@ class CustomAlertDialog(QDialog):
             QPushButton {
                 background-color: rgba(160,160,160,0.4);
                 color: white;
-                border-radius: 12px;
-                padding: 5px 5px;
-                font-size: 14px;
+                border-radius: 20px;
+                padding: 12px 15px;
+                font-size: 26px;
                 font-weight: bold;
-                min-width: 40px;
+                min-width: 90px;
                 margin: 0px 5px;
             }
             QPushButton:hover {
@@ -381,11 +363,11 @@ class CustomAlertDialog(QDialog):
             QPushButton {
                 background-color: #3B6EEB;
                 color: white;
-                border-radius: 12px;
-                padding: 5px 5px;
-                font-size: 14px;
+                border-radius: 20px;
+                padding: 10px 12px;
+                font-size: 26px;
                 font-weight: bold;
-                min-width: 40px;
+                min-width: 90px;
                 margin: 0px 5px;
             }
             QPushButton:hover {

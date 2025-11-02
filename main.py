@@ -12,7 +12,7 @@ from ui_pages.result_page import ResultPage
 from ui_pages.enrollment_input_page import EnrollmentInputPage
 from ui_pages.enrollment_start_page import EnrollmentStartPage
 from ui_pages.enrollment_recording_page import EnrollmentRecordingPage
-from ui_pages.reservation_page import ReservationPage, SeatMapPage
+from ui_pages.reservation_page import ReservationPage
 from ui_pages.return_page import ReturnSeatPage
 from ui_pages.seat_map_page import ReadingRoom1SeatMapPage, ReadingRoom2_1SeatMapPage, ReadingRoom2_2SeatMapPage, ReadingRoom2_2GradSeatMapPage
 from ui_pages.extend_page import ExtendSeatPage
@@ -33,7 +33,8 @@ class MainWindow(QStackedWidget):
     '''
     def __init__(self):
         super().__init__()
-        self.retries = TOTAL_ATTEMPTS 
+        self.retries = TOTAL_ATTEMPTS
+
         self.cap = cv2.VideoCapture(0)
         if not self.cap.isOpened():
             print("경고: 웹캠을 열 수 없습니다.")
@@ -46,6 +47,7 @@ class MainWindow(QStackedWidget):
         self.setWindowTitle("얼굴 인식 기반 시스템")
         self.setFixedSize(TARGET_W_MAIN, TARGET_H_MAIN)
         self.setWindowFlags(Qt.FramelessWindowHint) 
+        # self.showFullScreen()
         self.setStyleSheet("""
             MainWindow {
                 background-color: #1a1a1a; 
@@ -134,9 +136,6 @@ class MainWindow(QStackedWidget):
                 self.seat_map_page = ReadingRoom2_2SeatMapPage(self.switch_page, data)
             elif data == "제2-2열람실\n(대학원생 전용)":
                 self.seat_map_page = ReadingRoom2_2GradSeatMapPage(self.switch_page, data)
-            else:
-                # 기타 열람실 - 임시 페이지 사용 (수정 필요)
-                self.seat_map_page = SeatMapPage(self.switch_page, data)
                 
             self.addWidget(self.seat_map_page)
             self.setCurrentWidget(self.seat_map_page)

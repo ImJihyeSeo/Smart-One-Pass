@@ -2,7 +2,7 @@ from PySide6.QtWidgets import QLabel, QWidget, QVBoxLayout
 from PySide6.QtCore import Qt, QTimer, QSize, QAbstractAnimation
 from PySide6.QtGui import QPixmap, QPainter
 from .base_page import BasePage
-from ui_style import blinking_effect, scale_value, scale_qsize
+from ui_style import blinking_effect, TITLE_STYLE, LABEL_STYLE
 
 '''
 얼굴 인식 성공/실패 결과 + 얼굴 등록 결과 표시하는 페이지
@@ -73,11 +73,11 @@ class ResultPage(BasePage):
 
         main_layout = self.get_content_layout()
         main_layout.setAlignment(Qt.AlignCenter)
-        self.set_header_spacing(scale_value(-110))
+        self.set_header_spacing(-140)
         
         # 카드 위젯
         card_widget = QWidget()
-        card_widget.setFixedSize(scale_value(350), scale_value(300))
+        card_widget.setFixedSize(600, 550)
         card_widget.setStyleSheet("""
             QWidget {
                 background-color: #242424;
@@ -93,25 +93,23 @@ class ResultPage(BasePage):
         self.icon_label = QLabel()
         self.icon_label.setStyleSheet("background: transparent; border: none; border: 0px; margin: 0px;")
         pixmap = QPixmap(icon_file)
-        icon_size = scale_qsize(QSize(80, 80))
+        icon_size = QSize(130, 130)
         self.icon_label.setPixmap(pixmap.scaled(icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         self.icon_label.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(self.icon_label)
-        card_layout.addSpacing(15)
+        card_layout.addSpacing(25)
 
         # 메인 메시지
         self.message_label = QLabel(main_message)
         self.message_label.setAlignment(Qt.AlignCenter)
-        self.message_label.setStyleSheet("font-size: 28px; color: #ffffff; background-color: rgba(0, 0, 0, 0);")
+        self.message_label.setStyleSheet("font-size: 38px; color: #ffffff; margin-bottom: 5px;")
         card_layout.addWidget(self.message_label)
-        card_layout.addSpacing(15)
+        card_layout.addSpacing(20)
 
         # 서브 메시지
         self.action_label = QLabel(sub_message)
         self.action_label.setAlignment(Qt.AlignCenter)
-        self.action_label.setStyleSheet("""
-            font-size: 22px; color: #ffffff; background-color: rgba(0, 0, 0, 0); 
-        """)
+        self.action_label.setStyleSheet(LABEL_STYLE)
         card_layout.addWidget(self.action_label)
 
         self.opacity_effect, self.fade_animation = blinking_effect(self.action_label)   # 깜박임 효과

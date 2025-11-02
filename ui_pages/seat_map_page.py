@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QMouseEvent
-from ui_style import CustomAlertDialog, scale_value
+from ui_style import CustomAlertDialog
 from .base_page import BasePage 
 
 
@@ -54,8 +54,8 @@ class SeatButton(QPushButton):
         super().__init__(str(seat_id), parent)
         self.seat_id = seat_id
         self.current_status = current_status # DB에서 가져온 상태 저장
-        self.setFixedSize(35, 30)
-        self.setFont(QFont("Arial", 8))
+        self.setFixedSize(70, 60)
+        self.setFont(QFont("Arial", 20))
         self.setCursor(Qt.PointingHandCursor)
         self.setObjectName(f"Seat_{seat_id}")
         self._update_style()
@@ -149,11 +149,11 @@ class BaseSeatMapPage(BasePage):
             QComboBox {
                 background-color: transparent;
                 color: #ffffff;
-                border: 1px solid #1a1a1a;
+                border: 5px solid #242424;
                 border-radius: 4px;
                 padding: 5px 10px;
                 padding-right: 35px;
-                font-size: 16px;
+                font-size: 26px;
                 min-height: 40px;
             }
             QComboBox::drop-down {
@@ -170,7 +170,7 @@ class BaseSeatMapPage(BasePage):
                 margin-right: 5px;
             }
             QComboBox QAbstractItemView {
-                background-color: #000000;
+                background-color: #1a1a1a;
                 color: #ffffff;
                 selection-background-color: #3263ed;
             }
@@ -220,8 +220,8 @@ class BaseSeatMapPage(BasePage):
             ]
             
         elif status == "reserved":  # 예약된 좌석
-            title = f"{self.room_name} {styled_seat}번"
-            body = "이용 불가"
+            title = "이용불가좌석"
+            body = f"{self.room_name} {styled_seat}번"
             footer = ""
             buttons = [{'text': '닫기', 'style': 'cancel', 'callback': None}]
             
@@ -244,7 +244,7 @@ class BaseSeatMapPage(BasePage):
         # 실제 DB 업데이트 필요
         # 다음 페이지 전환
         complete_message = {
-            "title": "배정 완료",
+            "title": "배정완료",
             "body": f"{self.room_name} {self._get_styled_seat_number(seat_id)}번",
             "footer": ""
         }
@@ -280,13 +280,13 @@ class BaseSeatMapPage(BasePage):
         frame.setFrameShape(QFrame.StyledPanel)
         frame.setFrameShadow(QFrame.Plain)
 
-        VIEWPORT_WIDTH = scale_value(430) 
-        VIEWPORT_HEIGHT = scale_value(500)
+        VIEWPORT_WIDTH = 700
+        VIEWPORT_HEIGHT = 850
         frame.setFixedSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
 
         frame.setStyleSheet("""
             QFrame {
-                border: 2px solid #1a1a1a;
+                border: 5px solid #242424;
                 border-radius: 0px;
                 background-color: transparent;
             }
@@ -439,7 +439,7 @@ class BaseSeatMapPage(BasePage):
             else:
                 # 더미 좌석
                 empty_lbl = QLabel("")
-                empty_lbl.setFixedSize(scale_value(35), scale_value(30))
+                empty_lbl.setFixedSize(55, 55)
                 grid.addWidget(empty_lbl, 0, i) 
                 
             if seats_row2[i] > 0:
@@ -524,7 +524,7 @@ class ReadingRoom1SeatMapPage(BaseSeatMapPage):
         main_vbox.setContentsMargins(20, 20, 20, 20)
         
         V_GAP_SMALL = 20
-        V_GAP_LARGE = 40
+        V_GAP_LARGE = 90
         
         # QGridLayout 열 위치 매핑 (구역 간격 처리)
         col_map = {
@@ -564,14 +564,14 @@ class ReadingRoom1SeatMapPage(BaseSeatMapPage):
         
         # 장애인석
         hbox_reserved = QHBoxLayout()
-        hbox_reserved.setSpacing(5)
+        hbox_reserved.setSpacing(10)
         
         # 장애인석 ID 할당
         disabled_seat_ids = list(range(378, 381))
         
         # 버튼 크기
-        DISABLED_BTN_W = scale_value(45)
-        DISABLED_BTN_H = scale_value(30)
+        DISABLED_BTN_W = 130
+        DISABLED_BTN_H = 80
         
         for i, seat_id in enumerate(disabled_seat_ids):
             current_status = seat_statuses.get(seat_id, "available")
@@ -579,13 +579,14 @@ class ReadingRoom1SeatMapPage(BaseSeatMapPage):
             btn = SeatButton(seat_id, current_status=current_status)
             btn.setFixedSize(DISABLED_BTN_W, DISABLED_BTN_H)
             btn.setText(f"장애인{i + 1}") 
-            btn.setFont(QFont("Arial", 9))
+            btn.setFont(QFont("Arial", 22, QFont.Bold))
             
             # 스타일
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background-color: #ff9800; /* 노란색 배경 */
-                    color: white; 
+                    color: white;
+                    font-weight: bold;
                     border-radius: 4px;
                     padding: 3px;
                     border: 1px solid #ff9800;
@@ -758,7 +759,7 @@ class ReadingRoom2_1SeatMapPage(BaseSeatMapPage):
         main_vbox.setContentsMargins(20, 20, 20, 20)
         
         V_GAP_SMALL = 20
-        V_GAP_LARGE = 40
+        V_GAP_LARGE = 90
         
         # ----------------------------------------------------
         # 왼쪽 (1번) 구역
@@ -897,7 +898,7 @@ class ReadingRoom2_1SeatMapPage(BaseSeatMapPage):
         
         right_section = QWidget()
         vbox_right = QVBoxLayout(right_section)
-        vbox_right.setSpacing(V_GAP_SMALL) # 구역 간 수직 간격
+        vbox_right.setSpacing(V_GAP_LARGE) # 구역 간 수직 간격
         vbox_right.setContentsMargins(0, 0, 0, 0)
 
         # 4번 구역
@@ -906,37 +907,31 @@ class ReadingRoom2_1SeatMapPage(BaseSeatMapPage):
         for i, seat_id in enumerate(seats_4_1):
             grid_4_1.addWidget(self._create_seat_btn(seat_id, self._show_reservation_popup, seat_statuses), 0, i)
         vbox_right.addWidget(self._wrap_and_center_grid(grid_4_1))
-        vbox_right.addSpacing(V_GAP_SMALL)
 
         # 5-1 구역
         seats_5_1_row1 = list(range(192, 184, -1)) 
         seats_5_1_row2 = list(range(193, 201)) 
         vbox_right.addWidget(self._create_zig_zag_block_8col(seats_5_1_row1 + seats_5_1_row2, self._show_reservation_popup, seat_statuses))
-        vbox_right.addSpacing(V_GAP_SMALL)
         
         # 5-2 구역
         seats_5_2_row1 = list(range(208, 200, -1)) 
         seats_5_2_row2 = list(range(209, 217)) 
         vbox_right.addWidget(self._create_zig_zag_block_8col(seats_5_2_row1 + seats_5_2_row2, self._show_reservation_popup, seat_statuses))
-        vbox_right.addSpacing(V_GAP_SMALL)
 
         # 5-3 구역
         seats_5_3_row1 = list(range(224, 216, -1)) 
         seats_5_3_row2 = list(range(225, 233)) 
         vbox_right.addWidget(self._create_zig_zag_block_8col(seats_5_3_row1 + seats_5_3_row2, self._show_reservation_popup, seat_statuses))
-        vbox_right.addSpacing(V_GAP_SMALL)
 
         # 5-4 구역
         seats_5_4_row1 = list(range(240, 232, -1)) 
         seats_5_4_row2 = list(range(241, 249)) 
         vbox_right.addWidget(self._create_zig_zag_block_8col(seats_5_4_row1 + seats_5_4_row2, self._show_reservation_popup, seat_statuses))
-        vbox_right.addSpacing(V_GAP_SMALL)
 
         # 5-5 구역
         seats_5_5_row1 = list(range(256, 248, -1)) 
         seats_5_5_row2 = list(range(257, 265)) 
         vbox_right.addWidget(self._create_zig_zag_block_8col(seats_5_5_row1 + seats_5_5_row2, self._show_reservation_popup, seat_statuses))
-        vbox_right.addSpacing(V_GAP_SMALL)
 
         # 6번 구역
         grid_6_1 = QGridLayout()
@@ -978,7 +973,7 @@ class ReadingRoom2_2SeatMapPage(BaseSeatMapPage):
         main_vbox.setContentsMargins(20, 20, 20, 20)
         
         V_GAP_SMALL = 20
-        V_GAP_LARGE = 40 
+        V_GAP_LARGE = 90 
         
         # ----------------------------------------------------
         # 1번 구역
@@ -987,7 +982,7 @@ class ReadingRoom2_2SeatMapPage(BaseSeatMapPage):
         block_1_1_container = QWidget()
         block_1_1_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         vbox_1_1_main = QVBoxLayout(block_1_1_container)
-        vbox_1_1_main.setSpacing(V_GAP_SMALL)
+        vbox_1_1_main.setSpacing(V_GAP_LARGE)
         vbox_1_1_main.setContentsMargins(0, 0, 0, 0)
         
         # 상단
@@ -995,7 +990,6 @@ class ReadingRoom2_2SeatMapPage(BaseSeatMapPage):
         seats_1_1_A1_R = list(range(28, 26, -1)) 
         block_1_1_A_top1 = self._create_wall_block_2col(seats_1_1_A1_L, seats_1_1_A1_R, self._show_reservation_popup, seat_statuses)
         vbox_1_1_main.addWidget(block_1_1_A_top1)
-        vbox_1_1_main.addSpacing(V_GAP_SMALL)
         
         # 중간
         seats_1_1_A2_L = list(range(3, 7))
@@ -1004,7 +998,7 @@ class ReadingRoom2_2SeatMapPage(BaseSeatMapPage):
         vbox_1_1_main.addWidget(block_1_1_A_top2)
 
         # 하단 시작점 위치 조정
-        HEIGHT_ADJUSTMENT = scale_value(76)
+        HEIGHT_ADJUSTMENT = 136
         vbox_1_1_main.addItem(QSpacerItem(0, HEIGHT_ADJUSTMENT, QSizePolicy.Fixed, QSizePolicy.Fixed))
         
         # 하단
@@ -1021,7 +1015,7 @@ class ReadingRoom2_2SeatMapPage(BaseSeatMapPage):
         block_2_x_container = QWidget()
         block_2_x_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         vbox_2_x = QVBoxLayout(block_2_x_container)
-        vbox_2_x.setSpacing(V_GAP_SMALL)
+        vbox_2_x.setSpacing(V_GAP_LARGE)
         vbox_2_x.setContentsMargins(0, 0, 0, 0)
         
         # 상단
@@ -1029,14 +1023,12 @@ class ReadingRoom2_2SeatMapPage(BaseSeatMapPage):
         seats_2_1_A_R = list(range(60, 58, -1))
         block_2_1_A = self._create_wall_block_2col(seats_2_1_A_L, seats_2_1_A_R, self._show_reservation_popup, seat_statuses)
         vbox_2_x.addWidget(block_2_1_A)
-        vbox_2_x.addSpacing(V_GAP_SMALL) 
 
         # 중간
         seats_2_1_B_L = list(range(31, 37))
         seats_2_1_B_R = list(range(58, 52, -1))
         block_2_1_B = self._create_wall_block_2col(seats_2_1_B_L, seats_2_1_B_R, self._show_reservation_popup, seat_statuses)
         vbox_2_x.addWidget(block_2_1_B)
-        vbox_2_x.addSpacing(V_GAP_SMALL)
 
         # 하단
         seats_2_2_L = list(range(37, 45))
@@ -1052,7 +1044,7 @@ class ReadingRoom2_2SeatMapPage(BaseSeatMapPage):
         block_3_x_container = QWidget()
         block_3_x_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         vbox_3_x = QVBoxLayout(block_3_x_container)
-        vbox_3_x.setSpacing(V_GAP_SMALL)
+        vbox_3_x.setSpacing(V_GAP_LARGE)
         vbox_3_x.setContentsMargins(0, 0, 0, 0)
         
         # 상단
@@ -1060,7 +1052,6 @@ class ReadingRoom2_2SeatMapPage(BaseSeatMapPage):
         seats_3_1_A_R = list(range(84, 82, -1))
         block_3_1_A = self._create_wall_block_2col(seats_3_1_A_L, seats_3_1_A_R, self._show_reservation_popup, seat_statuses)
         vbox_3_x.addWidget(block_3_1_A)
-        vbox_3_x.addSpacing(V_GAP_SMALL)
         
         # 하단
         seats_3_1_B_L = list(range(63, 67))
@@ -1174,13 +1165,77 @@ class ReadingRoom2_2GradSeatMapPage(BaseSeatMapPage):
         self.seat_statuses = self.db.get_all_seat_statuses(room_id=4) # room_id=4 로드
         self._setup_common_ui(room_id=4)
 
+    # BaseSeatMapPage 의 _show_reservation_popup 메서드 오버라이딩
+    def _show_reservation_popup(self, seat_id):
+        styled_seat = self._get_styled_seat_number(seat_id)
+        status = self.seat_statuses.get(seat_id, "unknown")
+
+        room_name_base = "제2-2열람실"
+        room_name_spec = "(대학원생 전용)"
+
+        if status == 'available':
+            title = "좌석배정"
+            body = f"{room_name_base}<br>{room_name_spec}<br>{styled_seat}번"
+            footer = ""
+            buttons = [
+                {'text': '닫기', 'style': 'cancel', 'callback': None},
+                {'text': '배정', 'style': 'confirm', 'callback': lambda: self._process_reservation(seat_id)}
+            ]
+            
+        elif status == "reserved":
+            title = "이용불가좌석"
+            body = f"{room_name_base}<br>{room_name_spec}<br>{styled_seat}번"
+            footer = ""
+            buttons = [{'text': '닫기', 'style': 'cancel', 'callback': None}]
+            
+        else:
+            title = "오류"
+            body = "좌석 상태를 확인할 수 없습니다."
+            footer = ""
+            buttons = [{'text': '확인', 'style': 'confirm','callback': None}]
+
+        info_message = {
+            "title": title,
+            "body": body,
+            "footer": footer
+        }
+
+        dialog = CustomAlertDialog(info_message, self, buttons=buttons) 
+        dialog.exec()
+
+    # 오버라이딩
+    def _process_reservation(self, seat_id):
+        # 실제 DB 업데이트 필요
+        # 다음 페이지 전환
+
+        styled_seat = self._get_styled_seat_number(seat_id)
+
+        room_name_base = "제2-2열람실"
+        room_name_spec = "(대학원생 전용)"
+
+        complete_message = {
+            "title": "배정완료",
+            "body": f"{room_name_base}<br>{room_name_spec}<br>{styled_seat}번",
+            "footer": ""
+        }
+        complete_buttons = [
+            {
+                'text': '확인', 
+                'style': 'confirm', 
+                'callback': lambda: self.switch_callback("idle")
+            }
+        ]
+        
+        complete_dialog = CustomAlertDialog(complete_message, self, buttons=complete_buttons)
+        complete_dialog.exec()
+
     def _create_seat_map_layout(self, container, seat_statuses):
         main_vbox = QVBoxLayout(container)
         main_vbox.setSpacing(0)
         main_vbox.setContentsMargins(20, 20, 20, 20)
         
         V_GAP_SMALL = 20
-        V_GAP_LARGE = 40
+        V_GAP_LARGE = 90
         
         # ----------------------------------------------------
         # 메인 수평 컨테이너 (1번 | 2번 | 캐럴)
@@ -1201,8 +1256,8 @@ class ReadingRoom2_2GradSeatMapPage(BaseSeatMapPage):
         carrel_seat_ids = list(range(193, 199)) 
         
         # 캐럴 버튼 크기
-        CARREL_BTN_W = scale_value(45)
-        CARREL_BTN_H = scale_value(30)
+        CARREL_BTN_W = 120
+        CARREL_BTN_H = 80
         
         # 캐럴 버튼 생성 및 이벤트 연결
         for i, seat_id in enumerate(carrel_seat_ids):
@@ -1211,7 +1266,7 @@ class ReadingRoom2_2GradSeatMapPage(BaseSeatMapPage):
             btn = SeatButton(seat_id, current_status=current_status)
             btn.setFixedSize(CARREL_BTN_W, CARREL_BTN_H)
             btn.setText(f"캐럴{6 - i}") 
-            btn.setFont(QFont("Arial", 10, QFont.Bold))
+            btn.setFont(QFont("Arial", 22, QFont.Bold))
             btn.clicked.connect(lambda checked, s=seat_id: self._show_reservation_popup(s))
 
             vbox_carrel.addWidget(btn)

@@ -8,7 +8,7 @@ from PySide6.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QBitmap
 import cv2
 import time
 
-from ui_style import TARGET_W, TARGET_H, BORDER_RADIUS, fade_in_out, scale_value
+from ui_style import TARGET_W, TARGET_H, BORDER_RADIUS, fade_in_out, GUIDE_STYLE
 from cv_tools import detect_faces
 from .base_page import BasePage
 
@@ -67,12 +67,13 @@ class EnrollmentRecordingPage(BasePage):
         self.setStyleSheet("QWidget { background: transparent; }")
         main_layout = self.get_content_layout()
         main_layout.setAlignment(Qt.AlignTop)
-        self.set_header_spacing(scale_value(-10))
+        self.set_header_spacing(-10)
 
         # --------------------------
         # 단계 표시 바
         # --------------------------
         self._init_step_bar(main_layout)
+        main_layout.addSpacing(30)
 
         # --------------------------
         # 비디오 영역
@@ -81,6 +82,7 @@ class EnrollmentRecordingPage(BasePage):
         self.video_label.setFixedSize(self.TARGET_W, self.TARGET_H)
         self.video_label.setStyleSheet(f"QLabel {{ background-color: #333333; border-radius: {self.BORDER_RADIUS}px; }}")
         main_layout.addWidget(self.video_label, alignment=Qt.AlignCenter)
+        main_layout.addSpacing(60)
 
         # 오버레이 프레임
         self.overlay_frame = QFrame(self.video_label)
@@ -90,19 +92,13 @@ class EnrollmentRecordingPage(BasePage):
 
         # 상태 메시지 라벨
         self.overlay_status_label = QLabel(None)
-        self.overlay_status_label.setStyleSheet("""
-            font-size: 22px;
-            color: white;
-            background-color: transparent;
-            border-radius: 10px;
-            padding: 10px;
-        """)
+        self.overlay_status_label.setStyleSheet(GUIDE_STYLE)
         self.overlay_status_label.hide()
        
         # 안내 메시지 라벨
         self.instruction_label = QLabel()
         self.instruction_label.setAlignment(Qt.AlignCenter)
-        self.instruction_label.setStyleSheet("font-size: 22px; color: #ffffff; margin-top: 20px;")
+        self.instruction_label.setStyleSheet(GUIDE_STYLE)
        
         message_container = QWidget()
         message_layout = QVBoxLayout(message_container)
@@ -116,7 +112,7 @@ class EnrollmentRecordingPage(BasePage):
         # 가이드라인
         # --------------------------
         self.guide_image_label = QLabel(self.video_label)
-        GUIDE_IMAGE_SIZE = scale_value(130)
+        GUIDE_IMAGE_SIZE = 220
         self.guide_image_label.setFixedSize(GUIDE_IMAGE_SIZE, GUIDE_IMAGE_SIZE)
         self.guide_image_label.setStyleSheet("background: transparent;")
         self.guide_image_label.move(
@@ -167,8 +163,8 @@ class EnrollmentRecordingPage(BasePage):
         self.progress_bars = []
         self.step_lines = []
 
-        label_fixed_size = 28
-        connector_fixed_width = 50
+        label_fixed_size = 100
+        connector_fixed_width = 120
 
         for i in range(len(ENROLLMENT_STEPS)):
             bar = QLabel(f"{i+1}")
@@ -184,13 +180,13 @@ class EnrollmentRecordingPage(BasePage):
 
             if i < len(ENROLLMENT_STEPS) - 1:
                 connector = QLabel()
-                connector.setFixedSize(connector_fixed_width, 2)
+                connector.setFixedSize(connector_fixed_width, 3)
                 connector.setStyleSheet("background-color: #ffffff; border: none; margin:0; padding:0;")
                 self.step_lines.append(connector)
                 self.step_layout.addWidget(connector, alignment=Qt.AlignVCenter)
 
         parent_layout.addWidget(self.step_indicator_widget, alignment=Qt.AlignCenter)
-        parent_layout.addSpacing(10)
+        parent_layout.addSpacing(20)
 
     # 단계별 진행 바 스타일
     def _get_step_style(self, index, state):
@@ -205,14 +201,12 @@ class EnrollmentRecordingPage(BasePage):
                 background-color: {bg_color};
                 color: {text_color};
                 border-radius: 5px;
-                font-weight: bold;
+                font-size: 22px;
                 border: none;
-                padding: 0px;
+                padding: 5px;
                 margin: 0px;
-                min-width: 28px;
-                max-width: 28px;
-                min-height: 28px;
-                max-height: 28px;
+                min-width: 36px;
+                min-height: 36px;
             }}
         """
 
