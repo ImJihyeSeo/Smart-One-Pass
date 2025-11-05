@@ -16,6 +16,7 @@ from ui_pages.reservation_page import ReservationPage
 from ui_pages.return_page import ReturnSeatPage
 from ui_pages.seat_map_page import ReadingRoom1SeatMapPage, ReadingRoom2_1SeatMapPage, ReadingRoom2_2SeatMapPage, ReadingRoom2_2GradSeatMapPage
 from ui_pages.extend_page import ExtendSeatPage
+from ui_pages.prediction_result_page import PredictionResultPage
 
 from faceid.face_recognizer import FaceRecognizer
 
@@ -139,7 +140,13 @@ class MainWindow(QStackedWidget):
                 
             self.addWidget(self.seat_map_page)
             self.setCurrentWidget(self.seat_map_page)
-                
+        
+        # 혼잡도 예측 결과 페이지
+        elif page_name == "prediction_result":
+            self.prediction_result_page = PredictionResultPage(self.switch_page, data)
+            self.addWidget(self.prediction_result_page)
+            self.setCurrentWidget(self.prediction_result_page)
+
         elif page_name == "idle":
             self.retries = TOTAL_ATTEMPTS # 초기화
             self.setCurrentWidget(self.idle_page)

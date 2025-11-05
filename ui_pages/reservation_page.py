@@ -1,12 +1,12 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout, 
-    QGridLayout, QFrame, QSizePolicy, QSpacerItem
+    QGridLayout, QFrame, QSizePolicy, QSpacerItem, QComboBox, QDialog
 )
-from PySide6.QtCore import Qt, QDate, QRectF, QRect
+from PySide6.QtCore import Qt, QDate, QRectF, QRect, QTime, QSize, QPoint
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor
 
 from .base_page import BasePage
-from ui_style import BUTTON_STYLE, ICON_BUTTON_STYLE, CustomAlertDialog
+from ui_style import KOREAN_LOCALE, BUTTON_STYLE, ICON_BUTTON_STYLE, OverlayWidget, CustomAlertDialog, DateSelectionDialog
 
 class CircleProgressWidget(QFrame):
     """ 좌석 현황을 원형 도넛 차트로 표시하고 텍스트 포함하는 커스텀 위젯 """
@@ -18,15 +18,15 @@ class CircleProgressWidget(QFrame):
         self.callback = callback
         
         # 전체 위젯
-        self.CARD_WIDTH = 270
-        self.CARD_HEIGHT = 270
+        self.CARD_WIDTH = 250
+        self.CARD_HEIGHT = 250
         self.setFixedSize(self.CARD_WIDTH, self.CARD_HEIGHT) 
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet("background: transparent;")
         
         # 원형 차트 관련 변수
-        self.chart_size = 160
-        self.ring_width = 18
+        self.chart_size = 140
+        self.ring_width = 16
         self.progress_percent = (self.current / self.total) if self.total > 0 else 0
         
         # 텍스트 위젯
@@ -103,7 +103,7 @@ class CircleProgressWidget(QFrame):
 
         # 잔여 좌석
         font_num = painter.font()
-        font_num.setPointSize(30)
+        font_num.setPointSize(28)
         font_num.setBold(True)
         painter.setFont(font_num)
         painter.setPen(BLUE)
@@ -115,7 +115,7 @@ class CircleProgressWidget(QFrame):
         
         # 사용 좌석/전체 좌석
         font_usage = painter.font()
-        font_usage.setPointSize(18)
+        font_usage.setPointSize(16)
         font_usage.setBold(False)
         painter.setFont(font_usage)
         painter.setPen(QColor(170, 170, 170))
@@ -127,7 +127,7 @@ class CircleProgressWidget(QFrame):
 
         # 열람실명
         font_name = painter.font()
-        font_name.setPointSize(22)
+        font_name.setPointSize(20)
         font_name.setBold(False) 
         painter.setFont(font_name)
         painter.setPen(QColor(255, 255, 255))
@@ -164,10 +164,16 @@ class ReservationPage(BasePage):
 
         today = QDate.currentDate()
         self.selected_date = today.toString("yyyy-MM-dd")
-        self.selected_date_display = today.toString("MM월 dd일 (ddd)")
+        self.selected_date_display = KOREAN_LOCALE.toString(today, "MM월 dd일 (ddd)")
+
+        self.selected_date_pred = self.selected_date 
+        self.selected_date_display_pred = self.selected_date_display
+        self.selected_time_pred = "시간대"
 
         self._setup_action_buttons(main_layout)
         self._setup_status_cards(main_layout)
+        self._setup_prediction_section(main_layout)
+
         main_layout.addSpacing(40)
 
     def _get_user_reservation_data(self):
@@ -200,14 +206,15 @@ class ReservationPage(BasePage):
 
     def _setup_status_cards(self, layout):
         grid_container = QFrame()
-        GRID_WIDTH = 600   # 컨테이너 너비 고정 -> 중앙 공백 제거
-        grid_container.setFixedWidth(GRID_WIDTH)
-        grid_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        grid_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         grid_container.setStyleSheet("background: transparent; border: none;")
 
         status_grid = QGridLayout(grid_container)
         status_grid.setContentsMargins(0, 0, 0, 0)
         status_grid.setSpacing(20)  # 카드 간 간격 조정
+
+        status_grid.setColumnStretch(0, 1) 
+        status_grid.setColumnStretch(1, 1)
 
         room_data = [
             ("제1열람실", 8, 375, "제1열람실"),
@@ -220,7 +227,7 @@ class ReservationPage(BasePage):
             row = i // 2
             col = i % 2
             status_card = self._create_status_card(name, current, total, lambda checked, k=key: self._go_to_seat_map(k))
-            status_grid.addWidget(status_card, row, col) 
+            status_grid.addWidget(status_card, row, col, alignment=Qt.AlignCenter) 
 
         # 테두리
         outer_frame = QFrame()
@@ -228,7 +235,7 @@ class ReservationPage(BasePage):
         outer_frame.setStyleSheet(f"""
             QFrame {{
                 background-color: transparent;
-                border: 1px solid #444444; /* 연한 회색 테두리 */
+                border: 2px solid #505050; /* 연한 회색 테두리 */
                 border-radius: 32px;
                 padding: 32px;
                 margin: 0px;
@@ -340,3 +347,248 @@ class ReservationPage(BasePage):
 
     def _go_to_seat_map(self, room_name):
         self.switch_callback("seat_map", room_name)
+
+    def _setup_prediction_section(self, layout):
+        prediction_container = QWidget()
+        prediction_container.setFixedSize(700, 150)
+        prediction_container.setStyleSheet("""
+            QWidget {
+                background-color: #242424; 
+                border-radius: 12px;
+                padding: 10px 15px;
+            }
+            QLabel {
+                background: transparent;
+            }
+        """)
+        vbox = QVBoxLayout(prediction_container)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+
+        input_hbox = QHBoxLayout()
+        input_hbox.setSpacing(0)
+        input_hbox.setAlignment(Qt.AlignCenter)
+
+        # 제목
+        header_label = QLabel("혼잡도 예측하기")
+        header_label.setStyleSheet("font-size: 24px; color: #ffffff; margin: 0px;")
+
+        # 날짜 선택
+        date_vbox = QVBoxLayout()
+        date_vbox.setContentsMargins(0, 0, 0, 0)
+        date_vbox.setSpacing(3)
+        date_vbox.setAlignment(Qt.AlignCenter)
+
+        icon_button_style = """
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                padding: 0px; 
+                min-width: 50px; 
+                max-width: 50px;
+                min-height: 50px;
+                max-height: 50px;
+            }
+            QPushButton:pressed {
+                background-color: transparent;
+            }
+        """
+
+        date_select_btn = QPushButton() 
+        date_select_btn.setIcon(QPixmap("resources/calendar.png"))
+        date_select_btn.setIconSize(QSize(30, 30))
+        date_select_btn.setStyleSheet(icon_button_style)
+        date_select_btn.clicked.connect(self._show_calendar_dialog)
+        date_vbox.addWidget(date_select_btn, alignment=Qt.AlignCenter)
+        
+        self.date_label = QLabel(self.selected_date_display_pred)
+        self.date_label.setStyleSheet("font-size: 16px; color: #ffffff;")
+        self.date_label.setAlignment(Qt.AlignCenter)
+        date_vbox.addWidget(self.date_label)
+
+        # 시간 선택
+        self.selected_time_pred = "시간대"
+        self.time_combo = QComboBox()
+        self.time_combo.setObjectName("TimeCombo")
+        self.time_combo.setStyleSheet(self._get_combo_box_style())
+        self._populate_time_combo()
+        self.time_combo.currentIndexChanged.connect(self._update_selected_time)
+
+        # 확인 버튼
+        confirm_btn = QPushButton("확인")
+        confirm_btn_style = f"""
+            {BUTTON_STYLE}
+            QPushButton {{
+                border-radius: 25px;
+                padding: 0; 
+                min-width: 50px; 
+                max-width: 50px;
+                min-height: 50px; 
+                max-height: 50px;
+                font-size: 20px;
+            }}
+        """
+        confirm_btn.setStyleSheet(confirm_btn_style) 
+        confirm_btn.clicked.connect(self._show_prediction_result) 
+
+        # 배치
+        input_hbox.addStretch(1)
+        input_hbox.addWidget(header_label)
+        input_hbox.addStretch(1)
+        input_hbox.addLayout(date_vbox)
+        input_hbox.addStretch(1)
+        input_hbox.addWidget(self.time_combo)
+        input_hbox.addStretch(1)
+        input_hbox.addWidget(confirm_btn)
+        input_hbox.addStretch(1)
+
+        vbox.addLayout(input_hbox)
+        layout.addWidget(prediction_container, alignment=Qt.AlignHCenter)
+
+    def _get_combo_box_style(self):
+        """ 시간대 콤보박스 스타일 """
+        COMBO_BG_COLOR = "#383838" 
+        
+        return f"""
+            QComboBox#TimeCombo {{
+                background-color: {COMBO_BG_COLOR};
+                color: #ffffff;
+                border: 1px solid #444444;
+                border-radius: 4px;
+                padding: 5px 10px;
+                font-size: 20px;
+                min-height: 40px;
+                min-width: 120px;
+            }}
+
+            QComboBox#TimeCombo::drop-down {{
+                border: none; 
+                width: 25px; 
+            }}
+
+            QComboBox#TimeCombo::down-arrow {{
+                image: url(resources/down_arrow.png); 
+                width: 15px; 
+                height: 15px;
+                margin-right: 5px;
+            }}
+            
+            QComboBox QAbstractItemView {{
+                background-color: {COMBO_BG_COLOR}; 
+                color: #ffffff;
+                border: 1px solid #444444; 
+                border-top-left-radius: 4px;      
+                border-top-right-radius: 4px;     
+                border-bottom-left-radius: 0px;   
+                border-bottom-right-radius: 0px;  
+                selection-background-color: #3263ed;
+                outline: none;
+            }}
+            
+            QComboBox QAbstractItemView::item {{
+                min-height: 45px;
+                padding: 5px 10px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.15); 
+            }}
+
+            QComboBox QAbstractItemView::item:last {{
+                border-bottom: none;
+            }}
+                        
+            QScrollBar:vertical {{
+                width: 40px; /* 스크롤바 너비 */
+                background: {COMBO_BG_COLOR}; 
+                margin: 0px;
+            }}
+
+            /* Thumb */
+            QScrollBar::handle:vertical {{
+                background: #ffffff;
+                min-height: 50px;
+                border-radius: 8px; 
+                border: none;
+            }}
+            
+            /* 상/하 화살표 버튼 제거 */
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+                subcontrol-position: none; 
+            }}
+        """
+
+    def _populate_time_combo(self):
+        """ 06:00 ~ 00:00 시간대 목록 """
+        time_list = []
+        time_list.append("시간대") 
+
+        time_list.append(QTime(0, 0).toString("hh:mm")) # 자정
+        
+        for hour in range(6, 24):
+            time_list.append(QTime(hour, 0).toString("hh:mm"))
+        
+        self.time_combo.addItems(time_list)
+        self.time_combo.setCurrentIndex(0)
+        
+    def _update_selected_time(self, index):
+        """ 콤보박스 선택 -> 시간 업데이트 """
+        self.selected_time_pred = self.time_combo.currentText()
+        
+    def _show_calendar_dialog(self):
+        """ 달력 팝업창 표시 """
+        
+        # 오버레이
+        overlay = OverlayWidget(self) 
+        overlay.show()
+        overlay.setGeometry(self.rect())
+
+        # 달력 팝업창 생성 / 초기 날짜 설정
+        initial_date = QDate.fromString(self.selected_date_pred, "yyyy-MM-dd") 
+        dialog = DateSelectionDialog(initial_date, overlay) 
+        dialog.setWindowFlags(Qt.Window | Qt.FramelessWindowHint) 
+
+        dialog_width = 550 
+        dialog_height = 600
+        dialog.setFixedSize(dialog_width, dialog_height) 
+        
+        # 중앙 좌표 계산
+        parent_center = self.rect().center()
+        dialog_x = parent_center.x() - dialog_width // 2
+        dialog_y = parent_center.y() - dialog_height // 2
+        dialog.move(self.mapToGlobal(QPoint(dialog_x, dialog_y)))
+
+        result = dialog.exec()
+        
+        # 오버레이 숨기기 / 메모리에서 해제
+        overlay.hide()
+        overlay.deleteLater()
+
+        # 결과 처리
+        if result == QDialog.Accepted:
+            selected_date_str, display_str = dialog.get_selected_date() 
+            self.selected_date_pred = selected_date_str
+            self.selected_date_display_pred = display_str
+            self.date_label.setText(display_str)
+
+    def _show_prediction_result(self):
+        date_display = self.selected_date_display_pred
+        time_str = self.selected_time_pred
+
+        # 시간 선택 유효성 검사
+        if time_str == "시간대":
+            error_msg = {
+                "title": "입력 오류",
+                "body": "원하는 시간을 선택해주세요.",
+                "footer": ""
+            }
+            dialog = CustomAlertDialog(error_msg, self, width=450) 
+            dialog.exec()
+            return
+
+        # 페이지 전환 및 데이터 전달
+        prediction_info = {
+            'date_str': self.selected_date_pred, 
+            'date_display': date_display, 
+            'time_str': time_str
+        }
+        self.switch_callback("prediction_result", data=prediction_info)

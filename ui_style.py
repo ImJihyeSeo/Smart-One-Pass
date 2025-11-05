@@ -1,14 +1,15 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QWidget,
     QGraphicsOpacityEffect, QGraphicsBlurEffect, QGraphicsDropShadowEffect,
-    QCalendarWidget, QFrame
+    QCalendarWidget, QSizePolicy, QGridLayout, QSpacerItem, QFrame
 ) 
 from PySide6.QtCore import (
     Qt, QPropertyAnimation, QEasingCurve, QTimer, QByteArray, QDate, 
-    Signal, QSize
+    Signal, QSize, QLocale
 )
 from PySide6.QtGui import QColor, QPainter, QPixmap, QMouseEvent
 
+KOREAN_LOCALE = QLocale(QLocale.Korean, QLocale.SouthKorea)
 
 # 타겟 해상도
 TARGET_W_MAIN = 800
@@ -496,150 +497,245 @@ def blinking_effect(widget: QWidget, duration: int = 2000):
 
 # 달력 팝업창
 class DateSelectionDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, initial_date, parent=None):
         super().__init__(parent)
-        
-        # 오버레이 생성 및 표시
-        self.overlay = None
-        if parent:
-            self.overlay = OverlayWidget(parent)
-            self.overlay.show()
-            
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
-        self.setModal(True)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(220, 280)
 
-        # 그림자 효과
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(30)
-        shadow.setOffset(0, 8)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        self.setGraphicsEffect(shadow)
+        self.current_date = initial_date 
+        self.selected_date = initial_date
+        self.highlighted_button = None 
+        
+        self.setWindowTitle("달력")
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setFixedSize(550, 600)
+        
+        self.main_frame = QFrame(self)
+        self.main_frame.setFixedSize(self.size()) 
+        self.main_frame.setObjectName("CalendarFrame") 
 
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        dialog_layout = QVBoxLayout(self)
+        dialog_layout.setContentsMargins(0, 0, 0, 0)
+        dialog_layout.addWidget(self.main_frame)
         
-        # 배경 위젯
-        self.bg_frame = QFrame()
-        self.bg_frame.setObjectName("glass_frame")
-        self.bg_frame.setStyleSheet("""
-            QFrame#glass_frame {
-                background-color: rgba(255, 255, 255, 0.15);
-                border-radius: 25px;
-                border: 1px solid rgba(255,255,255,0.3);
-            }
-        """)
-        # 블러 효과
-        blur = QGraphicsBlurEffect()
-        blur.setBlurRadius(15)
-        self.bg_frame.setGraphicsEffect(blur)
+        main_layout = QVBoxLayout(self.main_frame)
+        main_layout.setSpacing(25)
+        main_layout.setContentsMargins(20, 20, 20, 20)
         
-        # 내부 콘텐츠 레이아웃
-        inner_layout = QVBoxLayout(self.bg_frame)
-        inner_layout.setContentsMargins(20, 20, 20, 20)
+        self.header_label = QLabel()
+        self.calendar_grid = QGridLayout()
         
-        # 달력 위젯 스타일
-        calendar_style = """
-            QCalendarWidget { 
-                alternate-background-color: #3a3a3a;
-                color: #ffffff;
-                font-size: 14px;
-                border-radius: 10px;
-                padding: 5px;
+        self._setup_header_layout(main_layout)
+        self._setup_calendar_grid(main_layout)
+        
+        self._apply_style()
+        
+        self._update_calendar(self.current_date)
+
+    # --------------------------------------------------------------------------
+    # 스타일 / UI
+    # --------------------------------------------------------------------------
+
+    def _get_default_base_style(self):
+        return """
+            QPushButton {
+                color: #FFFFFF;
+                background: transparent;
+                border: none;
+                font-size: 24px;
+                border-radius: 30px;
+                min-width: 60px;
+                max-width: 60px;
+                min-height: 60px;
+                max-height: 60px;
             }
-            QCalendarWidget QWidget#qt_calendar_navigationbar { 
-                background-color: #2e2e2e; 
-                border-top-left-radius: 10px;
-                border-top-right-radius: 10px;
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.1);
             }
-            QCalendarWidget QToolButton { 
-                color: #ffffff; 
-                icon-size: 20px;
-            }
-            /* 오늘 날짜 */
-            QCalendarWidget QAbstractItemView:!enabled {
-                color: #aaaaaa;
-            }
-            /* 선택 가능한 날짜 */
-            QCalendarWidget QAbstractItemView:enabled {
-                color: #ffffff;
-            }
-            /* 선택된 날짜 */
-            QCalendarWidget QAbstractItemView::item:selected {
-                background-color: #007bff; /* 파란색 배경으로 강조 */
-                color: #ffffff;
-                border-radius: 5px;
-            }
-            /* 마우스 오버 시 */
-            QCalendarWidget QAbstractItemView::item:hover {
-                background-color: #4a4a4a;
-                border-radius: 5px;
+        """
+        
+    def _get_highlight_style(self):
+        """ 선택된 날짜 버튼 """
+        return """
+            QPushButton {
+                color: #FFFFFF;
+                background-color: #3B6EEB;
+                border: none;
+                font-size: 24px;
+                border-radius: 30px;
+                min-width: 60px;
+                max-width: 60px;
+                min-height: 60px;
+                max-height: 60px;
             }
         """
 
-        self.calendar = QCalendarWidget()
-        self.calendar.setGridVisible(True)
-        self.calendar.setMinimumDate(QDate.currentDate())
-        self.calendar.setVerticalHeaderFormat(QCalendarWidget.NoVerticalHeader) 
-        self.calendar.setStyleSheet(calendar_style)
-        
-        inner_layout.addWidget(self.calendar)
-        
-        # 확인 버튼
-        confirm_btn = QPushButton("선택")
-        confirm_btn.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255,255,255,0.25);
-                border: 1px solid rgba(255,255,255,0.4);
-                color: white;
-                border-radius: 12px;
-                padding: 4px 8px;
-                font-size: 12px;
-                font-weight: bold;
+    def _apply_style(self):
+        self.setStyleSheet("""
+            QDialog {
+                background: transparent; 
             }
-            QPushButton:hover {
-                background-color: rgba(255,255,255,0.35);
+            
+            QFrame#CalendarFrame {
+                background-color: #1A1A1A;
+                border: 2px solid #505050;
+                border-radius: 30px;
             }
-            QPushButton:pressed {
-                background-color: rgba(255,255,255,0.5);
+            
+            QLabel {
+                color: #FFFFFF;
+                background: transparent;
             }
         """)
-        confirm_btn.clicked.connect(self.accept)
-        inner_layout.addWidget(confirm_btn)
+
+    def _setup_header_layout(self, parent_layout):
+        header_widget = QWidget()
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(10)
         
-        main_layout.addWidget(self.bg_frame)
+        self.prev_month_btn = QPushButton("<")
+        self.prev_month_btn.setFixedWidth(80)
+        self.prev_month_btn.clicked.connect(self._prev_month)
         
-        # 팝업 창 투명도 초기화 및 애니메이션 설정
-        self.setWindowOpacity(0.0)
-        self.fade_anim = QPropertyAnimation(self, b"windowOpacity")
-        self.fade_anim.setDuration(300)
-        self.fade_anim.setStartValue(0.0)
-        self.fade_anim.setEndValue(1.0)
+        self.header_label.setAlignment(Qt.AlignCenter)
+        self.header_label.setStyleSheet("font-size: 30px; font-weight: bold; padding: 10px 0;")
 
-
-    def showEvent(self, event):
-        super().showEvent(event)
+        self.next_month_btn = QPushButton(">")
+        self.next_month_btn.setFixedWidth(80)
+        self.next_month_btn.clicked.connect(self._next_month)
         
-        # 중앙 위치 계산 및 이동
-        if self.parent():
-            parent_geo = self.parent().window().frameGeometry()
-            center = parent_geo.center()
-            self.adjustSize()
-            self.move(center.x() - self.width() // 2,
-                      center.y() - self.height() // 2)
+        arrow_style = """
+            QPushButton {
+                color: #FFFFFF;
+                background: transparent;
+                border: none;
+                font-size: 32px;
+            }
+            QPushButton:hover {
+                color: #3B6EEB;
+            }
+        """
+        self.prev_month_btn.setStyleSheet(arrow_style)
+        self.next_month_btn.setStyleSheet(arrow_style)
+        
+        header_layout.addWidget(self.prev_month_btn)
+        header_layout.addWidget(self.header_label)
+        header_layout.addWidget(self.next_month_btn)
+        
+        parent_layout.addWidget(header_widget)
 
-        # 페이드 인 시작
-        self.fade_anim.start()
+    def _setup_calendar_grid(self, parent_layout):
+        
+        days = ["S", "M", "T", "W", "T", "F", "S"]
+        day_style = "font-size: 28px; font-weight: bold; color: #3B6EEB;"
+        for i, day in enumerate(days):
+            day_label = QLabel(day)
+            day_label.setAlignment(Qt.AlignCenter)
+            day_label.setStyleSheet(day_style)
+            self.calendar_grid.addWidget(day_label, 0, i)
+        
+        parent_layout.addLayout(self.calendar_grid)
+        parent_layout.addItem(QSpacerItem(0, 5, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-    def accept(self):
-        # 팝업 닫을 때 오버레이도 닫기
-        if self.overlay:
-            self.overlay.fade_out_and_close()
-        super().accept()
+    # --------------------------------------------------------------------------
+    # 날짜 로직
+    # --------------------------------------------------------------------------
+
+    def _update_calendar(self, date):
+        """ 현재 월 기준으로 달력 업데이트 """
+        
+        # 기존 날짜 버튼 제거
+        for i in reversed(range(self.calendar_grid.count())): 
+            item = self.calendar_grid.itemAt(i) 
+            position = self.calendar_grid.getItemPosition(i)
+
+            if position[0] > 0 and item.widget() is not None:
+                item.widget().deleteLater()
+        
+        self.highlighted_button = None
+
+        try:
+            month_name = KOREAN_LOCALE.toString(date, "MMM") 
+        except NameError:
+            month_name = date.toString("MMM") 
+            
+        self.header_label.setText(f"{month_name}")
+
+        first_day_of_month = QDate(date.year(), date.month(), 1)
+        day_of_week = first_day_of_month.dayOfWeek() % 7 
+
+        # 달력 시작 날짜 (이전 달 마지막 주)
+        current_day = first_day_of_month.addDays(-day_of_week)
+        
+        row = 1 
+        for _ in range(42):
+            if row > 6: break
+
+            col = current_day.dayOfWeek() % 7 
+            
+            date_button = QPushButton(str(current_day.day()))
+            date_button.setProperty("date", current_day.toString("yyyy-MM-dd"))
+            date_button.clicked.connect(self._date_clicked)
+
+            self._style_date_button(date_button, current_day, date)
+            
+            self.calendar_grid.addWidget(date_button, row, col)
+            
+            if col == 6:
+                row += 1
+                
+            current_day = current_day.addDays(1)
+
+    def _style_date_button(self, button, date_to_style, current_month_date):
+        """ 날짜 버튼 """
+        is_in_current_month = date_to_style.month() == current_month_date.month()
+        is_selected = date_to_style == self.selected_date
+        
+        if not is_in_current_month:
+            gray_style = self._get_default_base_style().replace("#FFFFFF", "#777777")
+            button.setStyleSheet(gray_style)
+            button.setEnabled(False) 
+            return
+
+        button.setEnabled(True) 
+
+        if is_selected:
+            # 선택된 날짜 -> 파란색 원형
+            button.setStyleSheet(self._get_highlight_style())
+            self.highlighted_button = button 
+        else:
+            button.setStyleSheet(self._get_default_base_style())
+
+    def _date_clicked(self):
+        """ 날짜 버튼 클릭 -> 하이라이트 이동, 팝업창 닫기 """
+        sender_button = self.sender()
+        if sender_button:
+            new_date_str = sender_button.property("date")
+            new_date = QDate.fromString(new_date_str, "yyyy-MM-dd")
+
+            if self.highlighted_button and self.highlighted_button != sender_button:
+                self.highlighted_button.setStyleSheet(self._get_default_base_style())
+
+            self.selected_date = new_date
+
+            sender_button.setStyleSheet(self._get_highlight_style())
+            self.highlighted_button = sender_button
+            
+            self.accept()
+        
+    def _prev_month(self):
+        self.current_date = self.current_date.addMonths(-1)
+        self._update_calendar(self.current_date)
+
+    def _next_month(self):
+        self.current_date = self.current_date.addMonths(1)
+        self._update_calendar(self.current_date)
         
     def get_selected_date(self):
-        """ 선택된 날짜 반환 """
-        date = self.calendar.selectedDate()
-        display_str = date.toString("MM월 dd일 (ddd)")
-        return date.toString("yyyy-MM-dd"), display_str
+        date_str = self.selected_date.toString("yyyy-MM-dd")
+        try:
+            display_str = KOREAN_LOCALE.toString(self.selected_date, "MM월 dd일 (ddd)")
+        except NameError:
+            display_str = self.selected_date.toString("MM월 dd일 (ddd)")
+
+        return date_str, display_str
