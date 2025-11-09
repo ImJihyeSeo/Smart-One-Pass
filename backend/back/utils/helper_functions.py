@@ -1,9 +1,7 @@
 # utils/helper_functions.py
 
 from typing import List, Dict, Any, Optional, Tuple, Union
-import sqlite3
-from database import get_db_connection
-from fastapi.responses import JSONResponse
+
 # Note: sqlite3.Row 타입을 사용하기 위해 sqlite3 모듈을 import합니다.
 
 # --- 1. 공통 오류 응답 포장 (error_response) ---
@@ -59,7 +57,7 @@ def success_response(
 
 # --- 3. DB Row 객체를 JSON 리스트로 번역 (format_db_rows_to_json) ---
 def format_db_rows_to_json(
-    db_rows: List[sqlite3.Row]
+    db_rows: List[Dict[str, Any]]
 ) -> List[Dict[str, Any]]:
     """
     SQLite의 Row 객체 리스트를 파이썬의 딕셔너리 리스트 (최종 JSON 형태)로 변환합니다.
@@ -72,10 +70,12 @@ def format_db_rows_to_json(
     json_list = []
     
     # 2. 각 행(Row)을 반복하며 dict() 함수로 딕셔너리 리스트를 만듭니다.
-    for row in db_rows:
-        # sqlite3.Row 객체는 dict()으로 변환되어야 클라이언트가 원하는 JSON 형태가 됩니다.
-        json_list.append(dict(row))
+    # for row in db_rows:
+    #     # sqlite3.Row 객체는 dict()으로 변환되어야 클라이언트가 원하는 JSON 형태가 됩니다.
+    #     json_list.append(row)
         
+    json_list = [row for row in db_rows]
+    
     return json_list
 
 # JSON 필수값 누락 확인

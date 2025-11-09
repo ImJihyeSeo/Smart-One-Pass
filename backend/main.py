@@ -3,6 +3,11 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from database import initialize_db # database.py에 정의된 초기화 함수 임포트
 
+
+# 이제 os.environ.get("DATABASE_URL") 등을 통해 접근 가능합니다.
+# (나머지 FastAPI 코드는 그대로 유지)
+
+
 # 💡 API 라우터 임포트 (back.api 폴더에서 가져온다고 가정)
 from back.api.user_api import router as user_router 
 from back.api.access_api import router as access_router

@@ -1,9 +1,11 @@
 # api/reservation_api.py (출입, 예약 조회 및 반납)
 from fastapi import APIRouter, HTTPException, Query, status
 from typing import Dict, Any, Optional, List
-from database import get_db_connection, initialize_db
-from ..services.core_service import check_student_exists, execute_delete_students, get_student_ID_by_face, check_access_of_student, execute_insert_student, update_student, process_access_record, create_reservation, check_time, get_access_records, get_seat_information, check_time_overlap, get_reservation_status, check_student_inside, check_extension_validity, execute_extend_reservation, execute_reservation_return
+from ..services.core_service import check_student_exists, execute_delete_students, get_student_ID_by_face, check_access_of_student, execute_insert_student, update_student, process_access_record, create_reservation, check_time, get_access_records, get_seat_information, check_time_overlap, get_reservation_status, check_student_inside, check_extension_validity, execute_extend_reservation, execute_reservation_return, get_room_operating_hours
 from ..utils.helper_functions import error_response, success_response, format_db_rows_to_json, validate_input
+import base64
+from datetime import datetime, timedelta, timezone
+
 
 router = APIRouter()
 
@@ -18,78 +20,168 @@ async def reserve_seat_handler(data: Dict[str, Any]):
     """
     
     # --- 1. 값 추출 및 유효성 검사 (DB X - Block 2) ---
-    required_keys = ['face', 'room_id', 'seat_number', 'date', 'start_time', 'end_time']
+    required_keys = ['sid', 'room_id', 'seat_number']
     if not validate_input(data, required_keys): 
         raise HTTPException(status_code=400, detail="EMPTY_DATA")
         
-    face_data = data['face']
+    sid_found = data.get('sid')
+    room_id = data.get('room_id')
+    seat_number = data.get('seat_number')
     
+    if sid_found is None:
+        # validate_input이 실패했을 때 400이 발생했어야 하지만, 
+        # 이 경로로 왔다는 것은 sid 키는 있지만 값이 None이라는 뜻입니다.
+        raise HTTPException(status_code=400, detail="SID_CANNOT_BE_NULL")
     
-    # --- 2. 얼굴 인증 및 회원/좌석 존재 확인 (SELECT) ---
+    # 2. 얼굴 인증 및 SID 획득 (SELECT)
+    # result = get_student_ID_by_face(face_data)
+    # if isinstance(result, tuple):
+    #     # NOT_FOUND 또는 DB 오류 발생 시 404/500 반환
+    #     raise HTTPException(status_code=404, detail=result[1].get('error_code'))
     
-    # 2-A. 얼굴 데이터로 SID 찾기 (Block 10)
-    sid = get_student_ID_by_face(face_data) 
-    if not sid:
-        raise HTTPException(status_code=404, detail="NOT_FOUND") # 얼굴 불일치
-    
-    data['sid'] = sid # 추후 사용을 위해 sid를 data에 추가
-    
-    # 2-B. 회원 존재 여부 확인 (Block 1 - 여기서 NOT_FOUND 처리 완료)
-    # Note: 이 함수는 이미 2-A에서 sid를 찾았으므로, students 테이블 존재 확인은 생략 가능하거나
-    #       get_student_ID_by_face 함수 내에서 통합 처리되었다고 가정합니다.
-    
+    # sid_found = result # 인증된 sid
+
+
+    # 🚨 추가: sid가 DB에 존재하는지 확인 (인증이 분리되었으므로 필수)
+    if not check_student_exists(sid_found): 
+        # 🚨 수정: 오류 코드를 명확히 지정하여 반환
+        raise HTTPException(
+            status_code=404, 
+            detail=error_response(
+                error_code="USER_NOT_FOUND", 
+                message=f"학번 {sid_found}는 등록되지 않은 회원입니다."
+            )
+        )
     # 2-C. 예약하려는 좌석의 존재 여부 확인 (SELECT)
-    seat_info = get_seat_information(data['room_id'], data['seat_number'])
-    if not seat_info:
-        raise HTTPException(status_code=404, detail="NOT_FOUND") # 좌석 없음
-
-
-    # --- 3. 시간 및 상태 검증 (DB X & SELECT) ---
+# 2-C. 예약하려는 좌석의 존재 여부 확인 (SELECT)
+    result = get_seat_information(room_id, seat_number)
     
-    # 3-A. 시간대 유효성 확인 (DB X - Block 5)
-    # Note: 운영 시간대는 설정 테이블에서 가져와야 하지만, 여기서는 임시 값으로 가정
-    operating_hours = {
-        "open": seat_info.get('open'),  # get_seat_information의 T2.open 컬럼 값
-        "close": seat_info.get('close') # get_seat_information의 T2.close 컬럼 값
-    }
-    is_time_valid, error_details = check_time(
-        data['start_time'], data['end_time'], operating_hours
-    )
-    if not is_time_valid:
-        raise HTTPException(status_code=409, detail="WRONG_TIME")
+    if isinstance(result, tuple):
+        error_details = result[1]
+        error_code = error_details.get('error_code')
         
-    # 3-B. 회원이 정석 내부에 들어온 상태인지 확인 (SELECT - Block 13)
-    if not check_student_inside(sid):
-        raise HTTPException(status_code=409, detail="WRONG_POSITION_LIBRARY")
+        # 🚨 NOT_FOUND와 DB_ERROR를 구분하여 처리합니다.
+        if error_code in ["DB_CONNECTION_ERROR", "DB_EXECUTION_ERROR"]:
+            raise HTTPException(status_code=500, detail=error_code)
+            
+        # 좌석이 없는 경우 404 반환
+        raise HTTPException(status_code=404, detail="SEAT_NOT_FOUND")
 
-    # 4. 개인 중복 예약 확인 (SELECT)
-    # Note: seat_reservation 테이블에서 해당 sid가 현재 시간 이후에 다른 예약이 있는지 확인
-    if check_time_overlap(
-        data['start_time'], data['end_time'], sid, table_name='seat_reservation_self_check' # 임시 테이블 명
-    ):
-        raise HTTPException(status_code=409, detail="ALREADY_RESERVED_SELF")
+    # 3. 시간 자동 계산 (현재 시간 기준 3시간 예약)
+    # now_kst = datetime.now()
+    # reservation_date = now_kst.strftime('%Y-%m-%d')
+    # start_time_str = now_kst.strftime('%H:%M:%S')
+    
+    # 🚨 수정: KST 타임존을 명확히 지정하여 현재 시간을 얻습니다.
+#          (PostgreSQL은 UTC를 선호하지만, 로컬 테스트의 일관성을 위해)
+    KST = timezone(timedelta(hours=9)) 
+    now_kst = datetime.now(KST)
 
+    reservation_date = now_kst.strftime('%Y-%m-%d')
+    start_time_str = now_kst.strftime('%H:%M:%S')
 
-    # 5. 타인 예약 충돌 확인 (SELECT - Block 8)
-    # Note: exclude_res_id=None으로 설정하여 모든 기존 예약을 대상으로 검증
-    if check_time_overlap(
-        data['start_time'], data['end_time'], data['room_id'], table_name='seat_reservation', exclude_res_id=None
-    ):
-        raise HTTPException(status_code=409, detail="ALREADY_RESERVED_OTHER")
+    # 3시간 후 계산 (날짜가 바뀌는 경우는 일단 무시)
+    end_time_dt = now_kst + timedelta(hours=3)
+    # end_time_str = end_time_dt.strftime('%H:%M:%S')
+    end_time_str = end_time_dt.strftime('%H:%M:%S')
 
+    # 4. 운영 시간 및 예약 가능 시간 검증 (check_time)
+    operating_hours = get_room_operating_hours(room_id) # core_service에서 운영 시간을 가져와야 함
 
-    # --- 6. 예약 기록 최종 저장 (INSERT) ---
-    # Note: create_reservation 함수는 data 딕셔너리와 type을 받아 최종 INSERT를 실행
-    success, error_details = create_reservation(data, type='seat')
+    if operating_hours is None:
+        raise HTTPException(status_code=404, detail="ROOM_NOT_FOUND")
+    
+    success, error_details = check_time(start_time_str, end_time_str, operating_hours)
+
     if not success:
-        raise HTTPException(status_code=500, detail="DB_ERROR")
+        # 🚨 check_time 내부에서 WRONG_TIME 또는 OPERATING_HOURS_VIOLATION 오류 처리
+        raise HTTPException(status_code=409, detail=error_details.get('error_code'))
         
+    # 5. 시간 충돌 검사 (check_time_overlap)
+    # 예약이 겹치는지 DB를 확인 (SELECT)
+    # if check_time_overlap(room_id, seat_number, reservation_date, start_time_str, end_time_str):
+    #     raise HTTPException(status_code=409, detail="ALREADY_RESERVED_OVERLAP")
+
+
+    # 5. 시간 충돌 검사 (check_time_overlap)
+    # 🚨 CRITICAL FIX: check_time_overlap의 매개변수를 DB에 맞게 전달
+    if check_time_overlap(
+        start_time_str,      # 🚨 시작 시간 (TIME)
+        end_time_str,        # 🚨 종료 시간 (TIME)
+        reservation_date,    # 🚨 날짜 (DATE)
+        room_id,             # room_id
+        seat_number,         # seat_number
+    ):
+        raise HTTPException(status_code=409, detail="ALREADY_RESERVED_OVERLAP")
+        
+    # 6. 최종 예약 생성 (INSERT)
+    reservation_data = {
+        'sid': sid_found,
+        'room_id': room_id,
+        'seat_number': seat_number,
+        'date': reservation_date,
+        'start_time': start_time_str,
+        'end_time': end_time_str
+    }
     
-    # 7. 성공 응답 반환 (DB X - Block 3)
+    success, error_details = create_reservation(reservation_data)
+    
+    if not success:
+        # DB 오류 발생 시
+        raise HTTPException(status_code=500, detail=error_details.get('error_code'))
+        
+    # 7. 성공 응답 반환
     return success_response(
         message="SEAT_RESERVE_SUCCESS", 
-        status_code=201
+        status_code=status.HTTP_201_CREATED
     )
+
+    # # --- 3. 시간 및 상태 검증 (DB X & SELECT) ---
+    
+    # # 3-A. 시간대 유효성 확인 (DB X - Block 5)
+    # # Note: 운영 시간대는 설정 테이블에서 가져와야 하지만, 여기서는 임시 값으로 가정
+    # operating_hours = {
+    #     "open": seat_info.get('open'),  # get_seat_information의 T2.open 컬럼 값
+    #     "close": seat_info.get('close') # get_seat_information의 T2.close 컬럼 값
+    # }
+    # is_time_valid, error_details = check_time(
+    #     data['start_time'], data['end_time'], operating_hours
+    # )
+    # if not is_time_valid:
+    #     raise HTTPException(status_code=409, detail="WRONG_TIME")
+        
+    # # 3-B. 회원이 정석 내부에 들어온 상태인지 확인 (SELECT - Block 13)
+    # if not check_student_inside(sid):
+    #     raise HTTPException(status_code=409, detail="WRONG_POSITION_LIBRARY")
+
+    # # 4. 개인 중복 예약 확인 (SELECT)
+    # # Note: seat_reservation 테이블에서 해당 sid가 현재 시간 이후에 다른 예약이 있는지 확인
+    # if check_time_overlap(
+    #     data['start_time'], data['end_time'], sid, table_name='seat_reservation_self_check' # 임시 테이블 명
+    # ):
+    #     raise HTTPException(status_code=409, detail="ALREADY_RESERVED_SELF")
+
+
+    # # 5. 타인 예약 충돌 확인 (SELECT - Block 8)
+    # # Note: exclude_res_id=None으로 설정하여 모든 기존 예약을 대상으로 검증
+    # if check_time_overlap(
+    #     data['start_time'], data['end_time'], data['room_id'], table_name='seat_reservation', exclude_res_id=None
+    # ):
+    #     raise HTTPException(status_code=409, detail="ALREADY_RESERVED_OTHER")
+
+
+    # # --- 6. 예약 기록 최종 저장 (INSERT) ---
+    # # Note: create_reservation 함수는 data 딕셔너리와 type을 받아 최종 INSERT를 실행
+    # success, error_details = create_reservation(data, type='seat')
+    # if not success:
+    #     raise HTTPException(status_code=500, detail="DB_ERROR")
+        
+    
+    # # 7. 성공 응답 반환 (DB X - Block 3)
+    # return success_response(
+    #     message="SEAT_RESERVE_SUCCESS", 
+    #     status_code=201
+    # )
 
 
 
@@ -147,9 +239,21 @@ async def return_seat_handler(data: Dict[str, Any]):
     result = get_reservation_status(conditions)
     
     # 500 DB 실행 오류 확인
+    # if isinstance(result, tuple) and not result[0]:
+    #     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_response(error_code="DB_ERROR"))
     if isinstance(result, tuple) and not result[0]:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_response(error_code="DB_ERROR"))
-        
+        # result[1]은 error_details 딕셔너리입니다.
+        error_details = result[1] 
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            # 🚨 수정: error_response에 error_details를 전달
+            detail=error_response(
+                error_code=error_details.get('error_code', 'DB_ERROR'),
+                message=error_details.get('message', '예약 조회 중 DB 오류가 발생했습니다.')
+            )
+        )
+
+
     # 🚨 DB 조회 결과가 리스트이므로, 단일 활성 예약만 확인합니다.
     # 현재 활성화된 예약이 없거나 (빈 리스트), 
     # 여러 개라면 논리 오류지만, 여기서는 [0]만 사용하거나 오류 처리함.
@@ -164,18 +268,29 @@ async def return_seat_handler(data: Dict[str, Any]):
         
     # 3. 예약 정보 추출 및 반납 실행 준비
     # 가장 최근의 (혹은 유일한) 활성 예약을 선택하여 딕셔너리로 변환
-    active_reservation = dict(result[0])
+    # active_reservation = dict(result[0])
+    active_reservation = result[0]
     reservation_id = active_reservation['reservation_id']
     
     # 4. 기록 삭제/갱신 실행 (DELETE/UPDATE 트랜잭션 - 500 방어)
     # 'seat'는 DELETE(취소)로 설계되었으므로, 해당 함수를 호출합니다.
-    success, error_details = execute_reservation_return(reservation_id, 'seat') 
+    success, error_details = execute_reservation_return(reservation_id) 
     
+    # if not success:
+    #     # DB 트랜잭션 오류 발생 시
+    #     raise HTTPException(
+    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+    #         detail=error_response(error_code="DB_ERROR", message=error_details.get('message'))
+    #     )
+
     if not success:
         # DB 트랜잭션 오류 발생 시
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=error_response(error_code="DB_ERROR", message=error_details.get('message'))
+            detail=error_response(
+                error_code=error_details.get('error_code', 'DB_ERROR'), # 🚨 오류 코드 추출
+                message=error_details.get('message', '예약 반납 중 DB 오류가 발생했습니다.')
+            )
         )
         
     # 5. 성공 응답 반환 (201 Created)
@@ -245,7 +360,8 @@ async def extend_seat_reservation_handler(data: Dict[str, Any]):
             detail=error_response(error_code="NOT_FOUND", message=f"예약 ID {res_id}를 찾을 수 없습니다.")
     )
     # 🚨 DB Row 객체를 단일 딕셔너리로 변환 (List[Row] -> Dict)
-    reservation_info = dict(result[0])
+    # reservation_info = dict(result[0])
+    reservation_info = result[0]
 
     # 🚨 3. 연장 가능성 검증 (새로운 로직)
     # reservation_info_list에는 하나의 예약 정보만 들어있어야 합니다.

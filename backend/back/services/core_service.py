@@ -2,10 +2,16 @@
 
 # services/core_service.py
 
-import sqlite3
-from typing import Union, Dict, Any, Tuple, Optional, List, bytes
+from typing import Union, Dict, Any, Tuple, Optional, List
 from datetime import datetime, timezone, time, timedelta
 from datetime import time as dt_time
+
+import psycopg2
+import psycopg2.extras
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # 🚨 import 경로는 당신의 실제 프로젝트 구조에 맞게 수정하세요.
 from database import get_db_connection 
@@ -19,7 +25,7 @@ def check_student_exists(sid: str) -> bool:
     try:
         cursor = conn.cursor()
         # sid를 이용해 students 테이블에서 sid를 조회
-        sql = "SELECT sid FROM students WHERE sid = ?"
+        sql = "SELECT sid FROM students WHERE sid = %s"
         cursor.execute(sql, (sid,))
 
         result = cursor.fetchone()
@@ -27,7 +33,7 @@ def check_student_exists(sid: str) -> bool:
         # 결과가 있으면 (None이 아니면) True 반환
         return result is not None
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(f"Error checking user existence: {e}")
         return False
 	
@@ -48,21 +54,21 @@ def execute_delete_students(sid: str) -> bool:
         # 🚨 트랜잭션 시작 (4개의 DELETE 작업)
         
         # 1. 예약 기록 삭제 (종속 테이블 먼저 삭제)
-        cursor.execute("DELETE FROM seat_reservation WHERE sid = ?", (sid,))
+        cursor.execute("DELETE FROM seat_reservation WHERE sid = %s", (sid,))
         
         # 2. 출입 기록 삭제
-        cursor.execute("DELETE FROM log WHERE sid = ?", (sid,))
+        cursor.execute("DELETE FROM log WHERE sid = %s", (sid,))
         
         # 3. 회원 기록 최종 삭제
-        cursor.execute("DELETE FROM students WHERE sid = ?", (sid,))
+        cursor.execute("DELETE FROM students WHERE sid = %s", (sid,))
         
         conn.commit() # 🚨 모든 쿼리가 성공했을 때만 최종 저장!
-        return True
+        return True, {}
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(f"User deletion failed: {e}")
         conn.rollback() # 오류 발생 시 모든 변경사항 취소
-        return False
+        return False, {}
         
     finally:
         conn.close()
@@ -112,7 +118,7 @@ def get_student_ID_by_face(face: bytes) -> Union[str, Tuple[bool, Dict[str, str]
         else:
             return False, ERROR_NOT_FOUND # 일치하는 회원이 없음 (404 방어)
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(f"Face check DB Error: {e}")
         return False, {"error_code": "DB_EXECUTION_ERROR", "message": "얼굴 검색 중 DB 오류 발생."}
         
@@ -154,18 +160,18 @@ def check_access_of_student(
         
     # [Case 2] 최근 기록을 확인합니다.
     
-    # exit_time이 NULL인지 확인합니다. (None이면 현재 입실 상태라는 뜻)
-    recent_exit_time = recent_log.get('exit') 
+    # exit이 NULL인지 확인합니다. (None이면 현재 입실 상태라는 뜻)
+    recent_exit = recent_log.get('exit') 
     
     # 2-A. 현재 입실 상태인 경우 (퇴장 기록이 없음)
-    if recent_exit_time is None:
+    if recent_exit is None:
         # 현재 도서관 내부에 있으므로, 다음 동작은 퇴장(OUT)이어야 합니다.
         log_id_to_update = recent_log.get('log_id')
         
         # 퇴장 처리 시, 갱신할 log_id를 함께 반환합니다.
         return ACTION_OUT, log_id_to_update
         
-    # 2-B. 현재 퇴실 상태인 경우 (exit_time에 값이 있음)
+    # 2-B. 현재 퇴실 상태인 경우 (exit에 값이 있음)
     else:
         # 이미 퇴장까지 완료했으므로, 다음 동작은 새로운 입장(IN)이어야 합니다.
         return ACTION_IN, None
@@ -175,51 +181,100 @@ def check_access_of_student(
 
 # DB 연결 함수는 get_db_connection()을 사용한다고 가정합니다.
 
+# def execute_insert_student(
+#     sid: str,
+#     face_data: Optional[bytes] # face 혹은 card는 하나만 있어도 되므로 Optional
+# ) -> Union[bool, Tuple[bool, Dict[str, str]]]:
+#     """
+#     students 테이블에 새로운 회원 기록을 삽입하는 트랜잭션 함수입니다.
+    
+#     Args:
+#         sid: 삽입할 회원의 학번 (PRIMARY KEY).
+#         face_data: 얼굴 인식 데이터 (선택적).
+#         card_id: 학생증 ID (선택적).
+        
+#     Returns:
+#         True (성공) 또는 (False, 오류 상세 정보)
+#     """
+#     # 함수 시작 부분에 추가 : 얼굴이나 카드가 무조건 있어야 함
+#     if face_data is None and card_id is None:
+#         return False, {"error_code": "INPUT_REQUIRED", "message": "얼굴 데이터 또는 카드 ID 중 하나는 필수입니다."}
+#     conn = get_db_connection()
+#     if conn is None: 
+#         return False, {"error_code": "DB_CONNECTION_ERROR", "message": "데이터베이스 연결에 실패했습니다."}
+    
+#     cursor = conn.cursor()
+#     ERROR_DB = {"error_code": "DB_ERROR", "message": "회원 기록 저장 중 데이터베이스 오류가 발생했습니다."}
+    
+#     try:
+#         # 🚨 INSERT 쿼리 실행
+#         sql = """
+#             INSERT INTO students (sid, face, card)
+#             VALUES (%s, %s, %s)
+#         """
+#         params = (sid, face_data, card_id)
+        
+#         cursor.execute(sql, params)
+        
+#         conn.commit() # 🚨 쿼리 실행 성공 시 최종 저장
+#         return True
+
+#     except psycopg2.IntegrityError:
+#         # 이미 존재하는 sid로 INSERT를 시도했을 때 (409 Conflict는 핸들러에서 방어)
+#         conn.rollback() 
+#         return False, {"error_code": "INTEGRITY_ERROR", "message": "이미 존재하는 학번입니다."} 
+        
+#     except psycopg2.Error as e:
+#         # 그 외 DB 오류 발생 시
+#         conn.rollback() 
+#         print(f"Student INSERT transaction failed: {e}")
+#         return False, ERROR_DB
+        
+#     finally:
+#         conn.close()
+
+# services/core_service.py (execute_insert_student 함수 수정)
+
 def execute_insert_student(
     sid: str,
-    face_data: Optional[bytes], # face 혹은 card는 하나만 있어도 되므로 Optional
-    card_id: Optional[str] #****************** 카드 아이디를 아직 구현 못함
+    name: str,                         # 🚨 추가: 이름을 필수 매개변수로 받습니다.
+    face_data: Optional[bytes] = None  # 🚨 수정: face_data를 선택 사항으로 처리합니다.
+    # 기존 card_id 매개변수는 완전히 제거되었습니다.
 ) -> Union[bool, Tuple[bool, Dict[str, str]]]:
     """
-    students 테이블에 새로운 회원 기록을 삽입하는 트랜잭션 함수입니다.
-    
-    Args:
-        sid: 삽입할 회원의 학번 (PRIMARY KEY).
-        face_data: 얼굴 인식 데이터 (선택적).
-        card_id: 학생증 ID (선택적).
-        
-    Returns:
-        True (성공) 또는 (False, 오류 상세 정보)
+    students 테이블에 새로운 회원 기록(sid, name, face_data)을 삽입하는 트랜잭션 함수입니다.
     """
-    # 함수 시작 부분에 추가 : 얼굴이나 카드가 무조건 있어야 함
-    if face_data is None and card_id is None:
-        return False, {"error_code": "INPUT_REQUIRED", "message": "얼굴 데이터 또는 카드 ID 중 하나는 필수입니다."}
+    
+    # 🚨 수정: 필수 입력값 확인 로직 (sid와 name은 필수, face_data는 선택)
+    if not sid or not name: 
+        return False, {"error_code": "INPUT_REQUIRED", "message": "학번(sid)과 이름(name)은 필수입니다."}
+
     conn = get_db_connection()
     if conn is None: 
         return False, {"error_code": "DB_CONNECTION_ERROR", "message": "데이터베이스 연결에 실패했습니다."}
-    
     cursor = conn.cursor()
     ERROR_DB = {"error_code": "DB_ERROR", "message": "회원 기록 저장 중 데이터베이스 오류가 발생했습니다."}
     
     try:
-        # 🚨 INSERT 쿼리 실행
+        # 🚨 수정: SQL 쿼리에서 'card'를 제거하고 'name'을 추가합니다.
         sql = """
-            INSERT INTO students (sid, face, card)
-            VALUES (?, ?, ?)
+            INSERT INTO students (sid, name, face)
+            VALUES (%s, %s, %s)
         """
-        params = (sid, face_data, card_id)
+        # 🚨 수정: params 튜플의 순서를 (sid, name, face_data)로 맞춥니다.
+        params = (sid, name, face_data) 
         
         cursor.execute(sql, params)
         
-        conn.commit() # 🚨 쿼리 실행 성공 시 최종 저장
-        return True
+        conn.commit()
+        return True, {}
 
-    except sqlite3.IntegrityError:
-        # 이미 존재하는 sid로 INSERT를 시도했을 때 (409 Conflict는 핸들러에서 방어)
+    except psycopg2.IntegrityError:
+        # 이미 존재하는 sid로 INSERT를 시도했을 때
         conn.rollback() 
         return False, {"error_code": "INTEGRITY_ERROR", "message": "이미 존재하는 학번입니다."} 
         
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         # 그 외 DB 오류 발생 시
         conn.rollback() 
         print(f"Student INSERT transaction failed: {e}")
@@ -235,7 +290,7 @@ def execute_insert_student(
 
 def update_student(
     sid: str,
-    update_data: Dict[str, Union[bytes, str, Any]]
+    update_data: Dict[str, bytes]
 ) -> Union[bool, Tuple[bool, Dict[str, str]]]:
     """
     students 테이블에서 sid에 해당하는 회원의 정보를 갱신합니다.
@@ -250,7 +305,7 @@ def update_student(
     
     
     # 1. 수정할 필드 목록과 값 목록 초기화
-    set_clauses = [] # SQL의 'SET column = ?' 부분을 담을 리스트
+    set_clauses = [] # SQL의 'SET column = %s' 부분을 담을 리스트
     params = []      # SQL 쿼리에 바인딩할 값 리스트
 
     # 2. 수정 가능한 필드 확인 및 쿼리 구성
@@ -261,19 +316,19 @@ def update_student(
         # bytes가 아니면 오류 반환 (API 호출자가 잘못된 타입을 보냈을 때)
             return False, {"error_code": "INVALID_TYPE", "message": "face 데이터는 반드시 bytes 타입이어야 합니다."}
     
-        set_clauses.append("face = ?")
+        set_clauses.append("face = %s")
         params.append(update_data['face'])
         
-    if 'card' in update_data:
-        set_clauses.append("card = ?")
-        params.append(update_data['card'])
+    # if 'card' in update_data:
+    #     set_clauses.append("card = %s")
+    #     params.append(update_data['card'])
         
     # 3. 수정할 내용이 없으면 True 반환 (할 일이 없으므로 성공 처리)
     if not set_clauses:
-        return True 
+        return True, {}
 
     # 4. 최종 SQL 쿼리 조립 및 WHERE 절에 sid 추가
-    sql = f"UPDATE students SET {', '.join(set_clauses)} WHERE sid = ?"
+    sql = f"UPDATE students SET {', '.join(set_clauses)} WHERE sid = %s"
     params.append(sid) # WHERE 절에 사용할 sid를 params 리스트의 마지막에 추가
     
     
@@ -290,9 +345,9 @@ def update_student(
             return False, {"error_code": "NOT_FOUND", "message": "수정할 회원 ID를 찾을 수 없습니다."}
 
         conn.commit() # 쿼리 실행 성공 시 최종 저장
-        return True
+        return True, {}
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         conn.rollback() 
         print(f"Student UPDATE transaction failed: {e}")
         return False, ERROR_DB
@@ -323,7 +378,7 @@ def process_access_record(
     try:
         if action_type == "IN":
             # [Case 1] 입장 처리: 새로운 기록을 INSERT 합니다.
-            sql = "INSERT INTO log (sid, enter) VALUES (?, ?)"
+            sql = "INSERT INTO log (sid, enter) VALUES (%s, %s)"
             cursor.execute(sql, (sid, current_time))
             
         elif action_type == "OUT":
@@ -333,7 +388,7 @@ def process_access_record(
                 return False, {"error_code": "LOGIC_ERROR", "message": "퇴장 처리 시 대상 LOG ID가 누락되었습니다."}
 
             # log_id를 사용해 가장 최근의 입장 기록에 퇴장 시간을 갱신합니다.
-            sql = "UPDATE log SET exit = ? WHERE log_id = ?"
+            sql = "UPDATE log SET exit = %s WHERE log_id = %s"
             cursor.execute(sql, (current_time, update_log_id))
 
             if cursor.rowcount == 0:
@@ -347,9 +402,9 @@ def process_access_record(
             
         
         conn.commit() # 🚨 쿼리 실행 성공 시 최종 저장
-        return True
+        return True, {}
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         # DB 오류 발생 시 변경사항 취소 및 500 에러 처리
         conn.rollback() 
         print(f"Access record transaction failed: {e}")
@@ -392,7 +447,7 @@ def create_reservation(
         sql = """
             INSERT INTO seat_reservation 
             (sid, room_id, seat_number, date, start_time, end_time)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """
         params = (
             data['sid'], data['room_id'], data['seat_number'], 
@@ -404,9 +459,9 @@ def create_reservation(
         
         # 3. 최종 저장: 쿼리가 성공했을 때만 commit() 합니다.
         conn.commit()
-        return True
+        return True, {}
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         # 오류 발생 시 변경사항 취소 (rollback)
         conn.rollback() 
         print(f"Reservation transaction failed : {e}")
@@ -442,7 +497,7 @@ def check_time(
     # 템플릿화된 오류 메시지
     ERROR_WRONG_TIME = {"error_code": "WRONG_TIME", "message": "예약 시간이 운영 규칙에 위배됩니다."}
 
-    time_format = "%H:%M"
+    time_format = "%H:%M:%S"
     try:
         # 1. 문자열 시간을 time 객체로 변환 (비교를 위해)
         start_dt = datetime.strptime(start_time, time_format).time()
@@ -463,28 +518,95 @@ def check_time(
     # -----------------------------------------------------------
     
     # 3. [규칙 A] 시작 시간이 종료 시간보다 빠른지 확인
-    if start_dt >= end_dt:
-        ERROR_WRONG_TIME["message"] = "종료 시간이 시작 시간보다 빠르거나 같습니다."
-        return False, ERROR_WRONG_TIME
+    # if start_dt >= end_dt:
+    #     ERROR_WRONG_TIME["message"] = "종료 시간이 시작 시간보다 빠르거나 같습니다."
+    #     return False, ERROR_WRONG_TIME
 
     # 4. [규칙 B] 예약 시간이 운영 시간 안에 있는지 확인
-    if start_dt < open_time or end_dt > close_time:
+    if start_dt < open_time & start_dt > close_time:
         ERROR_WRONG_TIME["message"] = f"운영 시간({open_time.strftime(time_format)}~{close_time.strftime(time_format)}) 외의 시간입니다."
         return False, ERROR_WRONG_TIME
         
     # 5. [규칙 C] 최소/최대 예약 시간 (예: 최소 30분, 최대 4시간) 확인
     
-    # 시간 차이를 계산하기 위해 임시로 날짜(datetime.min)를 붙여 datetime 객체로 만듭니다.
-    time_diff = datetime.combine(datetime.min, end_dt) - datetime.combine(datetime.min, start_dt)
+    # # 임시 날짜 객체 생성 (시간 차이 계산 용도)
+    start_dt_combined = datetime.combine(datetime.now().date(), start_dt)
+    end_dt_combined = datetime.combine(datetime.now().date(), end_dt)
+
+    # # 🚨 날짜 경계를 넘어갔다면, end_dt_combined에 하루(1일)를 더합니다.
+    if end_dt_combined < start_dt_combined:
+         end_dt_combined += timedelta(days=1)
+    
+    time_diff = end_dt_combined - start_dt_combined
+
+    # services/core_service.py (check_time 함수 내부 - 3시간 규칙 검사 부분)
+
+    # ... (중략: time_diff 계산 로직 유지)
+
     fixed_duration = timedelta(hours=3)
-    if time_diff != fixed_duration:
+    tolerance = timedelta(seconds=1) # 1초 미만의 오차는 허용
+
+    is_correct_duration = (time_diff > (fixed_duration - tolerance)) and \
+                        (time_diff < (fixed_duration + tolerance))
+
+    if not is_correct_duration:
         ERROR_WRONG_TIME["message"] = "예약 시간은 정확히 3시간으로만 설정할 수 있습니다."
         return False, ERROR_WRONG_TIME
+    # # 시간 차이를 계산하기 위해 임시로 날짜(datetime.min)를 붙여 datetime 객체로 만듭니다.
+    # # time_diff = datetime.combine(datetime.min, end_dt) - datetime.combine(datetime.min, start_dt)
+    # fixed_duration = timedelta(hours=3)
+    # if time_diff != fixed_duration:
+    #     ERROR_WRONG_TIME["message"] = "예약 시간은 정확히 3시간으로만 설정할 수 있습니다."
+    #     return False, ERROR_WRONG_TIME
         
     # 6. 모든 검증 통과 시 True 반환
-    return True
+    return True, {}
 
+# services/core_service.py (새 함수 추가)
 
+# ... (기존 get_db_connection 함수 사용)
+
+def get_room_operating_hours(room_id: str) -> Optional[Dict[str, str]]:
+    """
+    특정 열람실의 운영 시작/종료 시간을 DB에서 조회합니다.
+    (예: {'open': '09:00:00', 'close': '22:00:00'})
+    """
+    conn = get_db_connection()
+    if conn is None: 
+        return None  # DB 연결 실패 시 None 반환
+    
+    cursor = conn.cursor()
+    
+    try:
+        sql = """
+            SELECT open, close
+            FROM study_room
+            WHERE room_id = %s
+        """
+        cursor.execute(sql, (room_id,))
+        result = cursor.fetchone()
+        
+        if result:
+            # psycopg2.extras.RealDictCursor 사용 가정: 이미 딕셔너리 형태
+            # TIME 타입은 Python의 datetime.time 객체로 반환될 수 있음.
+            # 핸들러에서 문자열로 처리하기 쉽게 여기서 문자열로 포맷팅하거나, 
+            # API 핸들러에서 datetime.time 객체를 그대로 사용하도록 합니다.
+            
+            # 🚨 Note: 여기서는 API 핸들러의 check_time 함수가 문자열을 요구하므로,
+            #         datetime.time 객체를 HH:MM:SS 문자열로 변환하여 반환합니다.
+            return {
+                "open": result['open'].strftime('%H:%M:%S'),
+                "close": result['close'].strftime('%H:%M:%S')
+            }
+        else:
+            return None # 방을 찾지 못함
+            
+    except psycopg2.Error as e:
+        print(f"Room hours DB Error: {e}")
+        return None
+        
+    finally:
+        conn.close()
 
 
 
@@ -496,7 +618,7 @@ def get_access_records(
     sid: Optional[str] = None, 
     start_date: Optional[str] = None, 
     end_date: Optional[str] = None
-) -> Union[List[sqlite3.Row], Tuple[bool, Dict[str, str]]]:
+) -> Union[List[Dict[str, Any]], Tuple[bool, Dict[str, str]]]:
     """
     제공된 조건(sid, 날짜 범위)에 따라 출입 기록(log 테이블)을 조회합니다.
     
@@ -517,7 +639,7 @@ def get_access_records(
     
     # 쿼리의 기본 구조
     base_query = """
-        SELECT log_id, sid, enter_time, exit_time
+        SELECT log_id, sid, enter, exit
         FROM log
     """
     
@@ -527,20 +649,20 @@ def get_access_records(
 
     # 1. sid 조건 추가
     if sid:
-        conditions.append("sid = ?")
+        conditions.append("sid = %s")
         params.append(sid)
 
-    # 2. 날짜 범위 조건 추가 (enter_time의 날짜 부분만 비교)
+    # 2. 날짜 범위 조건 추가 (enter의 날짜 부분만 비교)
     if start_date and end_date:
-        # SQLite의 datetime() 함수를 사용하여 enter_time에서 날짜만 추출하여 비교
-        conditions.append("DATE(enter_time) BETWEEN ? AND ?")
+        # SQLite의 datetime() 함수를 사용하여 enter에서 날짜만 추출하여 비교
+        conditions.append("enter::DATE BETWEEN %s AND %s")
         params.append(start_date)
         params.append(end_date)
     elif start_date:
-        conditions.append("DATE(enter_time) >= ?")
+        conditions.append("enter::DATE >= %s")
         params.append(start_date)
     elif end_date:
-        conditions.append("DATE(enter_time) <= ?")
+        conditions.append("enter::DATE <= %s")
         params.append(end_date)
 
     # WHERE 절 조합
@@ -550,7 +672,7 @@ def get_access_records(
         query = base_query
 
     # 3. 데이터 정렬 (최신 기록이 위로 오도록)
-    query += " ORDER BY enter_time DESC"
+    query += " ORDER BY enter DESC"
 
     try:
         # SQL 쿼리 실행
@@ -560,7 +682,7 @@ def get_access_records(
         db_rows = cursor.fetchall()
         return db_rows # 👈 List[sqlite3.Row] 반환
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(f"Access records retrieval failed: {e}")
         return False, ERROR_DB 
         
@@ -592,8 +714,7 @@ def get_seat_information(
     conn = get_db_connection()
     if conn is None: 
         # DB 연결 실패 시 None 반환 (상위에서 500 에러 처리)
-        return None 
-    
+        return False, {"error_code": "DB_CONNECTION_ERROR", "message": "데이터베이스 연결에 실패했습니다."}
     cursor = conn.cursor()
     
     try:
@@ -609,7 +730,7 @@ def get_seat_information(
                 T2.close 
             FROM study_room_seat AS T1
             INNER JOIN study_room AS T2 ON T1.room_id = T2.room_id
-            WHERE T1.room_id = ? AND T1.seat_number = ?
+            WHERE T1.room_id = %s AND T1.seat_number = %s
         """
         # 매개변수는 순서대로 튜플에 담아 전달합니다.
         params = (room_id, seat_number)
@@ -624,13 +745,11 @@ def get_seat_information(
             return dict(result_row) 
         else:
             # 좌석을 찾지 못했을 경우
-            return None 
-
-    except sqlite3.Error as e:
+            return False, {"error_code": "SEAT_NOT_FOUND", "message": "요청하신 좌석 ID를 찾을 수 없습니다."}
+    except psycopg2.Error as e:
         print(f"Seat information retrieval failed: {e}")
         # DB 오류 발생 시 None 반환 (상위에서 500 에러 처리)
-        return None
-        
+        return False, {"error_code": "DB_EXECUTION_ERROR", "message": f"좌석 정보 조회 중 DB 오류: {str(e)}"}
     finally:
         conn.close()
 
@@ -684,17 +803,18 @@ def check_time_overlap(
             SELECT reservation_id 
             FROM seat_reservation
             WHERE 
-                room_id = ? AND seat_number = ?  /* 겹치는지 확인할 자원 (시설 또는 방) */
-                AND date = ?  /* 👈 날짜 일치 조건 추가 */
+                room_id = %s AND seat_number = %s  /* 겹치는지 확인할 자원 (시설 또는 방) */
+                AND date = %s  /* 👈 날짜 일치 조건 추가 */
+                AND return_time IS NULL
                 AND (
-                    (start_time < ?) AND (end_time > ?) /* 기존 예약이 요청 시간과 겹치는 경우 */
+                    (start_time < %s) AND (end_time > %s) /* 기존 예약이 요청 시간과 겹치는 경우 */
                 )
         """
         params = [room_id, seat_number, reservation_date, end_time, start_time] 
 
         # 3. 예약 변경 시 자기 자신 제외 (exclude_res_id 처리)
         if exclude_res_id is not None:
-            sql += " AND reservation_id != ?"
+            sql += " AND reservation_id != %s"
             params.append(exclude_res_id)
 
         # 4. 쿼리 실행
@@ -703,7 +823,7 @@ def check_time_overlap(
         # 5. 결과 반환: 충돌하는 예약이 한 건이라도 발견되면 True 반환
         return cursor.fetchone() is not None 
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(f"Time overlap check DB Error for seat_reservation: {e}")
         # DB 오류 발생 시 안전하게 True (충돌) 반환하여 예약 진행을 막습니다.
         return True
@@ -728,11 +848,12 @@ def get_reservation_status(
         List[Dict] (JSON List 형태로 변환 가능한 데이터 목록) 또는 (False, 오류 상세 정보).
     """
     conn = get_db_connection()
+    ERROR_DB = {"error_code": "DB_ERROR", "message": "예약 현황 조회 중 데이터베이스 오류가 발생했습니다."}
+    
     if conn is None: 
         return False, {"error_code": "DB_CONNECTION_ERROR", "message": "데이터베이스 연결에 실패했습니다."}
     
     cursor = conn.cursor()
-    ERROR_DB = {"error_code": "DB_ERROR", "message": "예약 현황 조회 중 데이터베이스 오류가 발생했습니다."}
     
     # 1. 조회할 테이블 및 자원 컬럼 결정
     table_name = 'seat_reservation'
@@ -747,11 +868,19 @@ def get_reservation_status(
     # conditions 딕셔너리를 반복하여 WHERE 절 구성
     for key, value in conditions.items():
         # 데이터베이스의 컬럼 이름과 JSON Key가 동일하다고 가정
-        where_clauses.append(f"{key} = ?") 
+        where_clauses.append(f"{key} = %s") 
         params.append(value)
         
     # 현재 시간보다 미래의 예약만 조회하는 조건 추가 (선택적)
-    where_clauses.append("end_time > DATETIME('now', 'localtime')") 
+    # where_clauses.append("end_time > DATETIME('now', 'localtime')") 
+    # 이 쿼리를 실행하면 오류가 발생했으므로, 쿼리 구문을 변경합니다.
+    # where_clauses.append("start_time < CURRENT_TIME") # 예약이 이미 시작했는지 확인 (당일 한정 문제)
+    # where_clauses.append("end_time > CURRENT_TIME") # 예약이 아직 끝나지 않았는지 확인 (당일 한정 문제)
+
+    # where_clauses.append("end_time > CURRENT_TIME AND date = CURRENT_DATE")
+    where_clauses.append("date + start_time <= NOW()") # 예약 시작 시간이 현재 시간보다 빠르거나 같고
+    # where_clauses.append("date + end_time > NOW()")   # 예약 종료 시간이 현재 시간보다 늦고
+    where_clauses.append("return_time IS NULL")
     
     # 3. 최종 쿼리 조립 및 정렬
     query = base_query + " WHERE " + " AND ".join(where_clauses)
@@ -766,7 +895,7 @@ def get_reservation_status(
         # (상위 API 핸들러에서 format_db_rows_to_json을 호출하여 최종 JSON으로 변환할 것입니다.)
         return db_rows
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(f"Reservation status retrieval failed: {e}")
         return False, ERROR_DB
         
@@ -801,7 +930,7 @@ def check_student_inside(sid: str) -> bool:
         sql = """
             SELECT exit 
             FROM log 
-            WHERE sid = ? 
+            WHERE sid = %s 
             ORDER BY log_id DESC 
             LIMIT 1
         """
@@ -826,7 +955,7 @@ def check_student_inside(sid: str) -> bool:
             # 이미 퇴실 처리되었으므로, 현재 내부에 있지 않습니다.
             return False
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(f"DB Error checking student status: {e}")
         # DB 오류 발생 시 안전하게 False 반환 (상위에서 500 에러 처리)
         return False 
@@ -950,7 +1079,7 @@ def execute_extend_reservation(
         sql_select = """
             SELECT reservation_id, date, end_time, room_id, seat_number, sid 
             FROM seat_reservation 
-            WHERE reservation_id = ?
+            WHERE reservation_id = %s
         """
         cursor.execute(sql_select, (res_id,))
         reservation_row = cursor.fetchone()
@@ -978,8 +1107,8 @@ def execute_extend_reservation(
         # --- 4. 기록 업데이트 (트랜잭션 실행) ---
         sql_update = """
             UPDATE seat_reservation 
-            SET end_time = ? 
-            WHERE reservation_id = ? AND sid = ?
+            SET end_time = %s 
+            WHERE reservation_id = %s AND sid = %s
         """
         # 쿼리 실행
         cursor.execute(sql_update, (new_end_time_str, res_id, reservation_info['sid']))
@@ -987,7 +1116,7 @@ def execute_extend_reservation(
         conn.commit() # 최종 저장
         return True
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         conn.rollback() # 오류 발생 시 롤백
         print(f"Reservation extension transaction failed: {e}")
         return False, {"error_code": "DB_ERROR", "message": "예약 연장 중 데이터베이스 오류 발생."}
@@ -1021,15 +1150,15 @@ def execute_reservation_return(
     
     # 1. 사용할 테이블과 상태 상수 결정
     table_name = 'seat_reservation'
-    status_value = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-    
+    # 🚨 CRITICAL FIX: 문자열 대신 Python datetime 객체 그대로 사용 (PostgreSQL 권장)
+    status_value = datetime.now(timezone.utc)
 
     try:
         # --- 2. UPDATE 쿼리 실행 (return_status 컬럼 업데이트) ---
         sql_update = f"""
             UPDATE {table_name}
-            SET return_time = ?  /* 👈 상태와 end_time(실제 반납 시간)을 갱신 */
-            WHERE reservation_id = ?
+            SET return_time = %s  /* 👈 상태와 end_time(실제 반납 시간)을 갱신 */
+            WHERE reservation_id = %s
         """
         
         # 쿼리 실행
@@ -1041,9 +1170,9 @@ def execute_reservation_return(
             return False, {"error_code": "NOT_FOUND", "message": f"예약 ID {res_id}를 찾을 수 없습니다."}
             
         conn.commit() # 최종 저장
-        return True
+        return True, {}
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         conn.rollback() # 오류 발생 시 롤백
         print(f"Reservation return transaction failed for {table_name}: {e}")
         return False, {"error_code": "DB_ERROR", "message": "예약 반납 중 데이터베이스 오류 발생."}

@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Dict, Any, Optional, List
-from database import get_db_connection, initialize_db
 from ..services.core_service import check_student_exists, execute_delete_students, get_student_ID_by_face, check_access_of_student, execute_insert_student, update_student, process_access_record, create_reservation, check_time, get_access_records, get_seat_information, check_time_overlap, get_reservation_status, check_student_inside
 from ..utils.helper_functions import error_response, success_response, format_db_rows_to_json, validate_input
 
@@ -12,9 +11,17 @@ router = APIRouter()
 async def get_access_list_handler(
     sid: Optional[str] = Query(None), start_date: Optional[str] = Query(None), end_date: Optional[str] = Query(None)
 ):
+    
+    input_data = {
+        'sid': sid, 
+        'start_date': start_date, 
+        'end_date': end_date
+    }
+    input_data = {k: v for k, v in input_data.items() if v is not None}
+
     # 1. 입력된 조건의 형식 유효성 확인 (400 방어)
-    if not validate_input(sid=sid, start_date=start_date, end_date=end_date):
-        raise HTTPException(status_code=400, detail="INVALID_FORMAT")
+    # if not validate_input(sid=sid, start_date=start_date, end_date=end_date):
+    #     raise HTTPException(status_code=400, detail="INVALID_FORMAT")
         
     # 2. 조건에 맞는 기록 조회 (SELECT)
     result = get_access_records(sid=sid, start_date=start_date, end_date=end_date)
@@ -29,42 +36,6 @@ async def get_access_list_handler(
     # 4. 성공 응답 반환 (기록이 없어도 200 OK)
     return success_response(message="ACCESS_LIST_RETURN", status_code=200, data=access_list)
 
-
-# 2. 얼굴 데이터를 주고 등록된 회원인지 DB에서 확인
-
-@router.post("/check")
-async def check_access_handler(data: Dict[str, Any]):
-    
-    # 1. 값 추출 및 필수 입력값 확인 (DB X - Block 2)
-    face_data = data.get('face')
-    required_keys = ['face']
-    
-    if not validate_input(data, required_keys): 
-        # face_data가 누락되었을 경우 400 Bad Request 발생 및 중단
-        raise HTTPException(status_code=400, detail="EMPTY_DATA")
-    
-    
-    # 2. 얼굴 데이터가 일치하는 sid를 찾기 (SELECT - Block 10)
-    # 이 함수는 sid(문자열)를 반환하거나, 못 찾거나 오류 시 (False, error_data)를 반환합니다.
-    result = get_student_ID_by_face(face_data)
-    
-    if isinstance(result, tuple):
-        # NOT_FOUND (얼굴 불일치) 또는 DB 오류 발생 시 404 반환
-        error_details = result[1]
-        
-        raise HTTPException(status_code=404, detail=error_details.get('error_code'))
-
-    sid_found = result # 인증에 성공한 sid (문자열)
-    
-    
-    # 3. 성공 응답 반환
-    # 200 OK와 함께 인증된 sid를 data 필드에 담아 반환합니다.
-    return success_response(
-        message="ACCESS_CHECK_SUCCESS", 
-        status_code=200,
-        # sid를 직접 담아 다음 API 호출에 사용할 수 있도록 제공합니다.
-        data={"sid": sid_found} 
-    )
 
 
 
@@ -93,7 +64,7 @@ async def record_access_handler(data: Dict[str, Any]):
         most_recent_row = recent_log[0]
         
         # sqlite3.Row 객체를 check_access_of_student 함수가 원하는 딕셔너리로 변환하여 재할당합니다.
-        recent_log = dict(most_recent_row) 
+        recent_log = most_recent_row
     else:
         # 기록이 없으면 (빈 리스트이면) check_access_of_student 함수의 Optional[Dict] 타입 힌트에 맞춰 None을 할당합니다.
         recent_log = None

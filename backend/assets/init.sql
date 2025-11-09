@@ -2,11 +2,9 @@ CREATE TABLE students (
 
     sid TEXT PRIMARY KEY, 
 
-    face BLOB NOT NULL,
+    face BLOB,
 
-    name TEXT,
-    
-    card
+    name TEXT
 
 );
 
@@ -21,42 +19,6 @@ CREATE TABLE log (
     FOREIGN KEY (sid) REFERENCES students(sid)
 
 );
-
--- CREATE TABLE facilities (
-
---     facility_id INTEGER PRIMARY KEY, 
-
---     room TEXT NOT NULL, 
-
---     location TEXT NOT NULL, 
-
---     min_company INTEGER, 
-
---     max_company INTEGER
-
--- );
-
--- CREATE TABLE facility_reservation (
-
---     reservation_id INTEGER PRIMARY KEY, 
-
---     sid TEXT NOT NULL, 
-
---     facility_id INTEGER NOT NULL, 
-
---     date TEXT NOT NULL, 
-
---     start_time TEXT NOT NULL, 
-
---     end_time TEXT NOT NULL, 
-
---     company_count INTEGER NOT NULL, 
-
---     FOREIGN KEY (sid) REFERENCES students(sid), 
-
---     FOREIGN KEY (facility_id) REFERENCES facilities(facility_id)
-
--- );
 
 CREATE TABLE study_room (
 
