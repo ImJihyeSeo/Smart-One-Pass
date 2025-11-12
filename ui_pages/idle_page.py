@@ -52,7 +52,7 @@ class IdlePage(QWidget):
         start_recognition_btn.clicked.connect(lambda: self.switch_callback("processing", TOTAL_ATTEMPTS))
         
         reserve_facility_btn = ImageButtonWidget("resources/reservation_button.png", button_size) # 이미지 경로 지정
-        reserve_facility_btn.clicked.connect(lambda: self.switch_callback("reservation"))
+        reserve_facility_btn.clicked.connect(lambda: self.switch_callback("processing", TOTAL_ATTEMPTS, mode="auth_reservation"))
 
         start_enrollment_btn = ImageButtonWidget("resources/enrollment_button.png", button_size) # 이미지 경로 지정
         start_enrollment_btn.clicked.connect(lambda: self.switch_callback("enrollment_input"))

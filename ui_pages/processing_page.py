@@ -23,13 +23,14 @@ class ProcessingPage(BasePage):
     '''
     UI 구성, QTimer 시작
     '''
-    def __init__(self, switch_callback, cap, retries, face_rec: FaceRecognizer): 
+    def __init__(self, switch_callback, cap, retries, face_rec: FaceRecognizer, mode=None):
         super().__init__(switch_callback)
 
         # 상태 변수 초기화
         self.cap = cap
         self.retries = retries
         self.face_rec = face_rec  # AI 모델 인스턴스
+        self.mode = mode
 
         self.start_time = None
         self.duration = 3.0
@@ -207,9 +208,31 @@ class ProcessingPage(BasePage):
                 # 얼굴 식별 - AI 모델
                 success, name, similarity = self.face_rec.identify_face(emb)
                 
-                # result_page로 결과 데이터 전달
-                result_data = (success, self.retries, name) 
-                self.switch_callback("result", result_data) 
+                # result_page로 결과 데이터 전달 (DB 연동 필요)
+                user_data = None
+                
+                if success:
+                    # 실제로는 self.face_rec.gallery에서 student_id 등을 조회해야 함
+                    # 현재는 face_recognizer.py에서 name을 key로 사용
+                    ident = self.face_rec.gallery.get(name)
+                    if ident:
+                        user_data = {"name": ident.name, "student_id": ident.student_id} 
+                    else:
+                        user_data = {"name": name, "student_id": "99999999"} # 더미 학번
+                
+                if success and self.mode == "auth_reservation":
+                    # print(f"DEBUG: Face recognition success in reservation mode. Skipping ResultPage.")
+                    # ReservationPage로 즉시 전환 (data에 학생 정보 전달)
+                    self.switch_callback("reservation", user_data)
+                    return
+                
+                # 예약 모드 실패 시: 4개 인자 전달
+                if self.mode == "auth_reservation":
+                    result_data = (success, self.retries, name, user_data)
+                else:   # 출입 인증 모드(기본값) 및 기타 모드: 3개 인자 전달
+                    result_data = (success, self.retries, name) 
+                
+                self.switch_callback("result", result_data, mode=self.mode)
         else:
             # 얼굴 미감지 시
             if self.guide_animation.state() == QAbstractAnimation.Running:

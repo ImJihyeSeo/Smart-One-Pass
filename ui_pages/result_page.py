@@ -19,6 +19,26 @@ class ResultPage(BasePage):
         # 애니메이션 객체 초기화
         self.scale_animation = None
         self.fade_animation = None
+
+        next_page = "idle" # 기본값
+
+        # 결과 데이터 언팩
+        if self.mode in ["auth", "auth_reservation"]:
+            if len(result_data) == 4:
+                # 'auth_reservation' 모드
+                self.success, current_retries, name, self.user_data = result_data
+            else:
+                # 'auth' 모드
+                self.success, current_retries, name = result_data
+                self.user_data = None
+
+            remaining_retries = current_retries - 1 if not self.success else current_retries
+        
+        else: # enroll, return, extend 모드
+            self.success = True # 성공 전제로 전환됨
+            remaining_retries = 0
+            name = None
+            self.user_data = result_data
         
         if self.mode == "auth":
             # 인증 모드: (success, current_retries, name)을 받음
@@ -29,16 +49,38 @@ class ResultPage(BasePage):
                 icon_file = "resources/check.png"
                 main_message = f"환영합니다, {name}님!"
                 sub_message = "출입문이 열립니다."
+                next_page = "idle"
             elif remaining_retries > 0:
                 icon_file = "resources/alert.png"
                 main_message = "인식 실패! 다시 시도해주세요."
                 sub_message = f"남은 횟수: {remaining_retries}회"
+                next_page = "processing"
             else:
                 icon_file = "resources/alert.png"
                 main_message = "인식에 최종 실패했습니다."
                 sub_message = "학생증을 이용해 주세요."
+                next_page = "idle"
             
             timeout_ms = 3000 if self.success else 5000
+
+        elif self.mode == "auth_reservation":
+            # 예약 인증 모드: (success, current_retries, name, user_data)을 받음
+            timeout_ms = 3000 if self.success else 5000
+            if self.success:
+                icon_file = "resources/check.png"
+                main_message = f"환영합니다, {name}님!"
+                sub_message = "예약 페이지로 자동 전환됩니다."
+                next_page = "reservation"   # 쓰이지 않음 - 성공 시 바로 reservation 페이지로 이동 - 학생 정보(self.user_data) 전달
+            elif remaining_retries > 0:
+                icon_file = "resources/alert.png"
+                main_message = "인식 실패! 다시 시도해주세요."
+                sub_message = f"남은 횟수: {remaining_retries}회"
+                next_page = "processing"    # 재시도 시 processing 페이지로, 모드 유지
+            else:
+                icon_file = "resources/alert.png"
+                main_message = "인식에 최종 실패했습니다."
+                sub_message = "학생증을 이용해 주세요."
+                next_page = "idle"  # 최종 실패 시 idle 페이지로
 
         elif self.mode == "enroll":
             # 등록 모드: user_data (dict)를 받음
@@ -50,6 +92,7 @@ class ResultPage(BasePage):
             main_message = f"{user_data['name']}님 ({user_data['student_id']}),\n성공적으로 등록되었습니다!"
             sub_message = "메인 화면으로 자동 전환됩니다"
             timeout_ms = 5000
+            next_page = "idle"
 
         elif self.mode == "return":
             # 반납 모드
@@ -121,12 +164,16 @@ class ResultPage(BasePage):
         self.timer = QTimer(self)
         
         # 페이지 전환 로직: 성공/최종 실패/등록 완료 시 idle, 재시도 가능 시 processing으로 복귀
-        if self.success or remaining_retries <= 0 or self.mode == "enroll":
-            next_page = "idle" 
+        if next_page == "reservation" and self.success:
+            # 성공 시 학생 정보 전달
+            self.timer.timeout.connect(lambda: self.switch_callback(next_page, self.user_data))
+        elif next_page == "processing":
+            # 재시도 시 남은 횟수와 모드 전달
+            self.timer.timeout.connect(lambda: self.switch_callback(next_page, remaining_retries, mode=self.mode))
         else:
-            next_page = "processing" 
+            # idle이나 auth 모드 처리
+            self.timer.timeout.connect(lambda: self.switch_callback(next_page, remaining_retries)) 
 
-        self.timer.timeout.connect(lambda: self.switch_callback(next_page, remaining_retries)) 
         self.timer.start(timeout_ms)
 
     def closeEvent(self, event):

@@ -75,8 +75,13 @@ class MainWindow(QStackedWidget):
         current_widget = self.currentWidget()
 
         if current_widget != self.idle_page and current_widget is not None:
-            self.removeWidget(current_widget)
-            current_widget.deleteLater()
+            if page_name not in ["processing", "result"]:
+                self.removeWidget(current_widget)
+                current_widget.deleteLater()
+            elif current_widget.objectName() == "ProcessingPage" or \
+                 current_widget.objectName() == "ResultPage":
+                self.removeWidget(current_widget)
+                current_widget.deleteLater()
 
         if page_name == "enrollment_input":
             self.enrollment_input_page = EnrollmentInputPage(self.switch_page)
@@ -97,7 +102,8 @@ class MainWindow(QStackedWidget):
         
         elif page_name == "processing":
             # self.face_rec 전달
-            self.processing_page = ProcessingPage(self.switch_page, self.cap, self.retries, self.face_rec) 
+            self.processing_page = ProcessingPage(self.switch_page, self.cap, self.retries, self.face_rec, mode=mode) 
+            self.processing_page.setObjectName("ProcessingPage") 
             self.addWidget(self.processing_page)
             self.setCurrentWidget(self.processing_page)
         
@@ -106,12 +112,21 @@ class MainWindow(QStackedWidget):
                 result_page = ResultPage(self.switch_page, data, mode=mode)
             else:
                 result_page = ResultPage(self.switch_page, data)
-
+            
+            result_page.setObjectName("ResultPage")
             self.addWidget(result_page)
             self.setCurrentWidget(result_page)
 
         elif page_name == "reservation":
-            self.reservation_page = ReservationPage(self.switch_page) 
+            if data is not None and isinstance(data, dict):
+                 print(f"DEBUG: Reservation granted for {data.get('name')} ({data.get('student_id')})")
+                 # 실제 ReservationPage가 학생 정보를 활용하는 로직이 필요
+                 # 현재 파일들만으로는 정보 전달만 수행
+                 # DB 연동 후 수정 필요
+                 # self.reservation_page = ReservationPage(self.switch_page, user_data=data)
+                 self.reservation_page = ReservationPage(self.switch_page)
+            else:
+                 self.reservation_page = ReservationPage(self.switch_page)
             self.addWidget(self.reservation_page)
             self.setCurrentWidget(self.reservation_page)
         
