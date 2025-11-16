@@ -41,6 +41,35 @@ def check_student_exists(sid: str) -> bool:
         conn.close()
 
 
+# DB에 있는지 확인
+
+def prev_check_student(sid: str, name: str) -> bool: # 🚨 name 매개변수 추가
+    conn = get_db_connection()
+    if conn is None:
+        return False # DB 연결 오류 발생
+
+    try:
+        cursor = conn.cursor()
+        
+        # 🚨 SQL 수정: sid가 일치하거나 OR name이 일치하는 레코드가 있는지 조회합니다.
+        sql = "SELECT sid FROM students WHERE sid = %s OR name = %s"
+        
+        # 🚨 파라미터 수정: sid와 name을 모두 전달합니다.
+        cursor.execute(sql, (sid, name))
+
+        result = cursor.fetchone()
+
+        # 결과가 있으면 (None이 아니면) 중복이므로 True 반환
+        return result is not None
+
+    except psycopg2.Error as e:
+        print(f"Error checking user existence: {e}")
+        return False
+    
+    finally:
+        conn.close()
+
+
 
 # --- 2. 회원 기록 삭제 (DELETE 트랜잭션 - 4단계) ---
 def execute_delete_students(sid: str) -> bool:

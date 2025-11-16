@@ -2,8 +2,8 @@ fastapi
 uvicorn
 pydantic
 psycopg2-binary==2.9.11
+python-dotenv
 
 
-
-pip install -r requirements.txt
-을 통해서 설치할 것
+# pip install -r requirements.txt
+# 을 통해서 설치할 것
