@@ -1,4 +1,4 @@
-import os, json, cv2, numpy as np
+import os, time, json, cv2, numpy as np
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Tuple, Optional
 from PIL import Image, ImageDraw, ImageFont
@@ -23,6 +23,7 @@ DET_SIZE = (512, 512)
 GALLERY_DIR = "faceid/outputs/registry"
 GALLERY_PATH = os.path.join(GALLERY_DIR, "gallery.json")
 
+FRAME_SKIP = 3
 THRESHOLD = 0.35
 MARGIN_TOP2 = 0.05
 MIN_SAMPLES_ID = 3
@@ -178,24 +179,53 @@ class FaceRecognizer:
         self.enroll_name = ""
         self.enroll_id = ""
         self.accum_vecs = []
+        
+        # ===== 성능/프레임 스킵 상태 =====
+        self.frame_idx = 0
+        self.last_emb: Optional[np.ndarray] = None
+        self.last_face = None
+        self.infer_times_ms: List[float] = []
 
     # ---------------- 임베딩 추출 ----------------
-    def embed_biggest(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None) -> Tuple[Optional[np.ndarray], Optional[dict]]:
-        """가장 큰 얼굴을 선택하여 임베딩 추출"""
+    def _embed_biggest_once(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None) -> Tuple[Optional[np.ndarray], Optional[dict]]:
+        """프레임스킵/캐시 없이, 실제로 한 번 추론"""
         faces = self.app.get(frame_bgr) if rrect is None else get_faces_in_rrect(self.app, frame_bgr, *rrect)
         if not faces:
             return None, None
 
-        # 가장 큰 얼굴 선택
         faces.sort(key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]), reverse=True)
         f = faces[0]
 
-        # 정규화된 임베딩 추출
         emb = getattr(f, "normed_embedding", None)
         if emb is None:
             e = f.embedding
             emb = e / np.linalg.norm(e)
         return emb.astype("float32"), f
+
+    def embed_biggest(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None, use_skip: bool = False) -> Tuple[Optional[np.ndarray], Optional[dict]]:
+        """
+        use_skip=False  : 매 호출마다 실제 추론 (Baseline / 등록용)
+        use_skip=True   : FRAME_SKIP에 따라 추론 간헐 실행 + 결과 캐시
+        """
+        # 프레임 인덱스 증가
+        self.frame_idx += 1
+
+        run_infer = (not use_skip) or (self.frame_idx % FRAME_SKIP == 0) or (self.last_emb is None)
+
+        if run_infer:
+            t0 = time.perf_counter()
+            emb, face = self._embed_biggest_once(frame_bgr, rrect)
+            t1 = time.perf_counter()
+
+            if emb is not None:
+                self.infer_times_ms.append((t1 - t0) * 1000.0)  # ms 기록
+
+            self.last_emb, self.last_face = emb, face
+        else:
+            # 추론 스킵 → 직전 결과 재사용
+            emb, face = self.last_emb, self.last_face
+
+        return emb, face
 
     # ---------------- 인증 ----------------
     def identify_face(self, embedding: np.ndarray) -> Tuple[bool, Optional[str], Optional[float]]:
@@ -225,11 +255,11 @@ class FaceRecognizer:
         self.accum_vecs = []
 
     def accumulate_sample(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None) -> Tuple[bool, int]:
-        """임베딩 샘플을 누적하고 현재 샘플 수 반환"""
+        """등록 샘플 누적 (항상 실제 추론 실행)"""
         if not self.is_enrolling:
             return False, 0
 
-        emb, _ = self.embed_biggest(frame_bgr, rrect)
+        emb, _ = self.embed_biggest(frame_bgr, rrect, use_skip=False)
         if emb is not None:
             self.accum_vecs.append(emb.copy())
             return True, len(self.accum_vecs)
@@ -259,6 +289,22 @@ class FaceRecognizer:
                 vecs=[v.tolist() for v in vecs],
                 template=tmpl.tolist(),
             )
+            
+    def reset_stats(self):
+        self.frame_idx = 0
+        self.last_emb = None
+        self.last_face = None
+        self.infer_times_ms.clear()
+
+    def get_latency_stats(self):
+        if not self.infer_times_ms:
+            return {"count": 0, "mean_ms": 0.0, "p95_ms": 0.0}
+        arr = np.asarray(self.infer_times_ms, dtype=np.float32)
+        return {
+            "count": int(len(arr)),
+            "mean_ms": float(arr.mean()),
+            "p95_ms": float(np.percentile(arr, 95)),
+        }
 
         save_gallery(GALLERY_PATH, self.gallery)
         print(f"-> Saved '{self.enroll_name}' ({len(vecs)} samples)")

@@ -10,10 +10,9 @@ from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QAbstractAnimation, Q
 from PySide6.QtGui import QPixmap, QImage, QPainter, QBitmap, QColor
 
 from ui_style import TARGET_W, TARGET_H, MESSAGE_AREA_HEIGHT, BORDER_RADIUS, GUIDE_STYLE
-from cv_tools import detect_faces
 from .base_page import BasePage
 
-from faceid.face_recognizer import FaceRecognizer
+from faceid.face_recognizer import FaceRecognizer, rrect_xyxy
 
 
 '''
@@ -132,6 +131,11 @@ class ProcessingPage(BasePage):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
+        
+        # 성능 측정용
+        self.perf_start = time.time()
+        self.perf_frames = 0
+        self.face_rec.reset_stats()
 
     def update_frame(self):
         if not self.cap.isOpened():
@@ -142,6 +146,7 @@ class ProcessingPage(BasePage):
         ret, frame = self.cap.read()
         if not ret:
             return
+        self.perf_frames += 1
         
         # 웹캠 화면 크롭 로직
         frame = cv2.flip(frame, 1) # 좌우 반전
@@ -164,6 +169,9 @@ class ProcessingPage(BasePage):
         # 크롭된 프레임 타겟 크기로 리사이즈해서 채우기
         frame = cv2.resize(frame, (target_w, target_h))
         
+        h, w, _ = frame.shape
+        rrect = rrect_xyxy(h,w)
+        
         # --------------------------
         # AI 모델 / 감지 로직
         # --------------------------
@@ -175,16 +183,15 @@ class ProcessingPage(BasePage):
         guide_y2 = guide_y1 + guide_width
         
         # 얼굴 감지 / 임베딩 추출
-        emb, face_obj = self.face_rec.embed_biggest(frame)
+        emb, face_obj = self.face_rec.embed_biggest(frame, rrect, use_skip=True)
 
-        # 가이드라인 영역에 얼굴 중심 있는지 확인하는 로직으로 UI 상태만 제어
-        faces_legacy = detect_faces(frame)
+        # 가이드라인 영역에 얼굴 중심 있는지 확인 (InsightFace 결과만 사용)
         face_in_guide = False
-        for (x, y, fw, fh) in faces_legacy:
-            cx, cy = x + fw // 2, y + fh // 2
+        if face_obj is not None:
+            bx1, by1, bx2, by2 = map(int, face_obj.bbox)
+            cx, cy = (bx1 + bx2) // 2, (by1 + by2) // 2
             if guide_x1 < cx < guide_x2 and guide_y1 < cy < guide_y2:
                 face_in_guide = True
-                break
         
         # --------------------------
         # UI 상태 제어
@@ -204,6 +211,16 @@ class ProcessingPage(BasePage):
             if elapsed >= self.duration:
                 self.timer.stop()
                 self.guide_animation.stop()
+                
+                # ==== 성능 요약 출력 ====
+                total_elapsed = time.time() - self.perf_start
+                fps = self.perf_frames / total_elapsed if total_elapsed > 0 else 0.0
+                stats = self.face_rec.get_latency_stats()
+                print("[ProcessingPage] FPS={:.2f}, frames={}, elapsed={:.2f}s"
+                      .format(fps, self.perf_frames, total_elapsed))
+                print("[ProcessingPage] single-frame latency mean={:.2f} ms, p95={:.2f} ms, count={}"
+                      .format(stats["mean_ms"], stats["p95_ms"], stats["count"]))
+                # ========================
 
                 # 얼굴 식별 - AI 모델
                 success, name, similarity = self.face_rec.identify_face(emb)
