@@ -8,6 +8,27 @@ from PySide6.QtGui import QPixmap, QPainter, QPen, QColor
 from .base_page import BasePage
 from ui_style import KOREAN_LOCALE, BUTTON_STYLE, ICON_BUTTON_STYLE, OverlayWidget, CustomAlertDialog, DateSelectionDialog
 
+# 예측 모델 연동
+# 순환 참조 방지를 위해 함수 안에서 import 하거나, 
+# 파일 상단 try-except 구문으로 처리하는 것이 좋습니다.
+from .prediction_result_page import PredictionResultPage
+
+# 백엔드 API 연동
+import sys
+import os
+import requests
+from PySide6.QtCore import QTimer
+
+# 상위 폴더의 session_manager 불러오기
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+try:
+    from session_manager import UserSession  # 👈 여기가 핵심입니다.
+except ImportError:
+    print("Warning: session_manager not found")
+
+API_BASE_URL = "http://34.213.241.165:8000"
+
+
 class CircleProgressWidget(QFrame):
     """ 좌석 현황을 원형 도넛 차트로 표시하고 텍스트 포함하는 커스텀 위젯 """
     def __init__(self, name, current, total, callback):
@@ -27,18 +48,43 @@ class CircleProgressWidget(QFrame):
         # 원형 차트 관련 변수
         self.chart_size = 140
         self.ring_width = 16
-        self.progress_percent = (self.current / self.total) if self.total > 0 else 0
+
+        # 기존 코드 주석 처리
+        # self.progress_percent = (self.current / self.total) if self.total > 0 else 0
         
-        # 텍스트 위젯
-        self.num_text = f"{total - current}"
-        self.usage_text = f"{current}/{total}"
-        self.name_text = name
+        # # 텍스트 위젯
+        # self.num_text = f"{total - current}"
+        # self.usage_text = f"{current}/{total}"
+        # self.name_text = name
+
+        # 백엔드 API 연동
+        # [수정] 변수 계산 로직을 별도 함수로 분리하여 초기화 시 호출
+        self._recalc_variables()
 
         # 메인 레이아웃
         main_layout = QVBoxLayout(self) 
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addItem(QSpacerItem(0, 110, QSizePolicy.Fixed, QSizePolicy.Fixed))
     
+    # 백엔드 API 연동
+    # 👇 [추가 1] 내부 변수 재계산 함수
+    def _recalc_variables(self):
+        """ 현재 값(current)과 전체 값(total)을 기반으로 퍼센트와 텍스트를 다시 계산 """
+        self.progress_percent = (self.current / self.total) if self.total > 0 else 0
+        self.num_text = f"{self.total - self.current}" # 잔여 좌석
+        self.usage_text = f"{self.current}/{self.total}"
+        self.name_text = self.name
+
+    # 👇 [추가 2] 외부에서 데이터를 갱신할 때 호출하는 함수 (필수!)
+    def update_status(self, current, total):
+        """ API에서 받아온 새로운 데이터로 UI 갱신 """
+        self.current = current
+        self.total = total
+        self._recalc_variables() # 텍스트와 퍼센트 다시 계산
+        self.update() # 화면 다시 그리기 (paintEvent 자동 호출)
+
+
+
     def paintEvent(self, event):
         """ 원형 차트 그리는 로직 """
         painter = QPainter(self)
@@ -176,20 +222,109 @@ class ReservationPage(BasePage):
 
         main_layout.addSpacing(40)
 
-    def _get_user_reservation_data(self):
-        """ DB 연동 필요 """
-        # 예약 없는 경우
-        # return None 
+        # 백엔드 API 연동
+        QTimer.singleShot(100, self.fetch_room_stats)
+
+    # 기존 코드 주석 처리
+    # def _get_user_reservation_data(self):
+    #     """ DB 연동 필요 """
+    #     # 예약 없는 경우
+    #     # return None 
         
-        # 임시 데이터
-        return {
-            "room": "제1열람실",
-            "seat_id": 142,
-            "start_time": "11:00",
-            "end_time": "17:00",
-            "extend_count": 0
-        }
+    #     # 임시 데이터
+    #     return {
+    #         "room": "제1열람실",
+    #         "seat_id": 142,
+    #         "start_time": "11:00",
+    #         "end_time": "17:00",
+    #         "extend_count": 0
+    #     }
+
+
+
+    # 백엔드 API 연동
+
+    def _get_user_reservation_data(self):
+        """ [API 연동] 현재 사용자의 예약 정보를 서버에서 가져옵니다. """
+        
+        # 1. 세션에서 현재 로그인한 학번 가져오기
+        current_sid = UserSession.instance().get_user_id()
+        
+        # 로그인이 안 되어 있으면 예약 정보도 없음
+        if not current_sid:
+            return None
+
+        try:
+            # 2. API 호출 (GET /seat/status?sid=학번)
+            response = requests.get(f"{API_BASE_URL}/seat/status", params={"sid": current_sid})
+            
+            if response.status_code == 200:
+                data_list = response.json().get("data", [])
+                
+                # 예약 데이터가 없으면 None 반환 (팝업에서 "예약 없음" 뜸)
+                if not data_list:
+                    return None
+                
+                # 3. 데이터 파싱 (가장 최근/활성화된 예약 1개만 가져옴)
+                res = data_list[0]
+                
+                # 서버의 room_id("1", "2-1")를 화면용 이름("제1열람실")으로 변환
+                ROOM_NAME_MAP = {
+                    "1": "제1열람실", 
+                    "2-1": "제2-1열람실", 
+                    "2-2": "제2-2열람실", 
+                    "2-2_grad": "제2-2열람실\n(대학원생 전용)"
+                }
+                # 매핑된 이름이 없으면 서버 값 그대로 사용
+                room_name = ROOM_NAME_MAP.get(res['room_id'], res['room_id'])
+
+                # 4. UI에 표시할 딕셔너리 반환
+                return {
+                    "room": room_name,
+                    "seat_id": res['seat_number'],
+                    # 시간 문자열에서 초 단위 제거 (예: "11:00:00" -> "11:00")
+                    "start_time": str(res['start_time'])[:5], 
+                    "end_time": str(res['end_time'])[:5],
+                    "extend_count": 0 # (API에 연장 횟수 정보가 없다면 0으로 고정)
+                }
+                
+            else:
+                print(f"Error getting reservation: {response.text}")
+                return None
+
+        except Exception as e:
+            print(f"Network Error (Get My Reservation): {e}")
+            return None
+
+    def fetch_room_stats(self):
+        """ [API 연동] 열람실별 통계 조회 """
+        try:
+            # 방금 만든 API 호출
+            response = requests.get(f"{API_BASE_URL}/seat/stats")
+            
+            if response.status_code == 200:
+                data = response.json().get("data", {})
+                
+                # 매핑: 백엔드 room_id -> 프론트엔드 표시 이름
+                ID_TO_NAME = {
+                    "1": "제1열람실",
+                    "2-1": "제2-1열람실",
+                    "2-2": "제2-2열람실",
+                    "2-2_grad": "제2-2열람실\n(대학원생 전용)"
+                }
+                
+                for room_id, info in data.items():
+                    display_name = ID_TO_NAME.get(room_id)
+                    if display_name and display_name in self.room_widgets:
+                        # 위젯 업데이트
+                        self.room_widgets[display_name].update_status(info['current'], info['total'])
+                        
+        except Exception as e:
+            print(f"Stats API Error: {e}")
     
+
+
+
     def _setup_action_buttons(self, layout):
         # 좌석 확인, 반납, 연장, Info 버튼 그룹
         icon_layout = QHBoxLayout()
@@ -571,24 +706,126 @@ class ReservationPage(BasePage):
             self.date_label.setText(display_str)
 
     def _show_prediction_result(self):
-        date_display = self.selected_date_display_pred
-        time_str = self.selected_time_pred
+        # 기존 코드 주석 처리
+        # date_display = self.selected_date_display_pred
+        # time_str = self.selected_time_pred
 
-        # 시간 선택 유효성 검사
-        if time_str == "시간대":
+        # # 시간 선택 유효성 검사
+        # if time_str == "시간대":
+        #     error_msg = {
+        #         "title": "입력 오류",
+        #         "body": "원하는 시간을 선택해주세요.",
+        #         "footer": ""
+        #     }
+        #     dialog = CustomAlertDialog(error_msg, self, width=450) 
+        #     dialog.exec()
+        #     return
+
+        # # 페이지 전환 및 데이터 전달
+        # prediction_info = {
+        #     'date_str': self.selected_date_pred, 
+        #     'date_display': date_display, 
+        #     'time_str': time_str
+        # }
+        # self.switch_callback("prediction_result", data=prediction_info)
+        
+
+        # 예측 모델 연동
+        """
+        [조회하기] 버튼 클릭 시 실행되는 함수
+        백엔드 API를 호출하여 예측 결과를 가져오고, 결과 페이지로 이동합니다.
+        """
+        # 1. 사용자가 선택한 날짜와 시간 가져오기
+        # (self.selected_date_pred는 '2025-11-26', self.selected_time_pred는 '14:00' 형태라고 가정)
+        date_str = getattr(self, 'selected_date_pred', None)
+        time_str = getattr(self, 'selected_time_pred', None)
+        
+        # 유효성 검사: 날짜나 시간을 선택하지 않았을 경우
+        if not date_str or not time_str or time_str == "시간대":
             error_msg = {
                 "title": "입력 오류",
-                "body": "원하는 시간을 선택해주세요.",
+                "body": "원하는 날짜와 시간을 모두 선택해주세요.",
                 "footer": ""
             }
-            dialog = CustomAlertDialog(error_msg, self, width=450) 
+            dialog = CustomAlertDialog(error_msg, self, width=450)
             dialog.exec()
             return
 
-        # 페이지 전환 및 데이터 전달
-        prediction_info = {
-            'date_str': self.selected_date_pred, 
-            'date_display': date_display, 
-            'time_str': time_str
-        }
-        self.switch_callback("prediction_result", data=prediction_info)
+        # 2. 백엔드 전송용 날짜 포맷 만들기 ("YYYY-MM-DD HH:MM:SS")
+        # 예: "2025-11-26 14:00:00"
+        target_datetime = f"{date_str} {time_str}:00"
+        print(f"📡 예측 요청 시간: {target_datetime}")
+
+        # 3. 백엔드 API 호출
+        try:
+            # 로딩 중 표시가 필요하다면 여기서 애니메이션 시작 등을 처리
+            
+            response = requests.post(
+                f"{API_BASE_URL}/predict/results", # /seat을 제거하고 /predict로 요청
+                json={"target_time": target_datetime},
+                timeout=5 # 5초 타임아웃 설정 (앱 멈춤 방지)
+            )
+            
+            if response.status_code == 200:
+                api_response = response.json()
+                results = api_response["results"] 
+                # results 예시: [{'name': '제1열람실', 'status': '여유', 'color': '#00c853'}, ...]
+
+                # 4. 페이지 전환 및 데이터 전달
+                
+                # 결과 페이지에 표시할 날짜 텍스트 (예: self.selected_date_display_pred 사용)
+                display_info = {
+                    'date_display': getattr(self, 'selected_date_display_pred', date_str),
+                    'time_str': time_str
+                }
+
+                # (1) 결과 페이지 객체 생성 (import 필요!)
+                # 파일 상단에: from .prediction_result_page import PredictionResultPage 추가 필요
+                
+                result_page = PredictionResultPage(self.switch_callback, display_info)
+                
+                # (2) ★ 핵심: 백엔드 데이터 주입
+                # (prediction_result_page.py에 update_ui 메서드가 있어야 함)
+                if hasattr(result_page, 'update_ui'):
+                    result_page.update_ui(results)
+                else:
+                    print("⚠️ Warning: update_ui 메서드가 PredictionResultPage에 없습니다.")
+
+                # (3) 화면 전환 (메인 윈도우의 스택 위젯을 제어해야 함)
+                # self.parent()는 보통 StackedWidget이나 MainWindow입니다.
+                # 구조상 switch_callback을 통해 페이지를 바꾸는 것이 더 안전할 수 있습니다.
+                # 하지만 '새로운 페이지 인스턴스'를 띄워야 하므로, 아래 방식을 사용합니다.
+                
+                # 메인 윈도우 찾기 (parent를 타고 올라감)
+                main_window = self.window() 
+                if main_window and hasattr(main_window, 'stacked_widget'):
+                    main_window.stacked_widget.addWidget(result_page)
+                    main_window.stacked_widget.setCurrentWidget(result_page)
+                else:
+                    print("❌ Error: 메인 윈도우의 stacked_widget을 찾을 수 없습니다.")
+
+            else:
+                # 서버 에러 처리
+                error_msg = {
+                    "title": "예측 실패",
+                    "body": f"서버에서 오류가 발생했습니다.\n(Code: {response.status_code})",
+                    "footer": "잠시 후 다시 시도해주세요."
+                }
+                CustomAlertDialog(error_msg, self).exec()
+
+        except requests.exceptions.ConnectionError:
+            error_msg = {
+                "title": "연결 오류",
+                "body": "서버와 연결할 수 없습니다.\n백엔드가 켜져 있는지 확인해주세요.",
+                "footer": ""
+            }
+            CustomAlertDialog(error_msg, self).exec()
+            
+        except Exception as e:
+            print(f"Error: {e}")
+            error_msg = {
+                "title": "오류",
+                "body": f"알 수 없는 오류가 발생했습니다.\n{str(e)}",
+                "footer": ""
+            }
+            CustomAlertDialog(error_msg, self).exec()

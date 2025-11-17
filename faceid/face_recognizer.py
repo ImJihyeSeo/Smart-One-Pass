@@ -1,8 +1,16 @@
-import os, json, cv2, numpy as np
+import os, time, json, cv2, numpy as np
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Tuple, Optional
 from PIL import Image, ImageDraw, ImageFont
 from insightface.app import FaceAnalysis
+
+# 백엔드 API 연동
+from PySide6.QtCore import QObject, QThread, Signal, Slot
+import requests
+import json
+
+AWS_BASE_URL = "http://34.213.241.165:8000"
+
 
 # ====================================================================
 # 환경 설정
@@ -23,6 +31,7 @@ DET_SIZE = (512, 512)
 GALLERY_DIR = "faceid/outputs/registry"
 GALLERY_PATH = os.path.join(GALLERY_DIR, "gallery.json")
 
+FRAME_SKIP = 3
 THRESHOLD = 0.35
 MARGIN_TOP2 = 0.05
 MIN_SAMPLES_ID = 3
@@ -51,7 +60,7 @@ def ensure_dir(p: str):
 class Identity:
     """개인 정보 및 얼굴 벡터 저장용 구조체"""
     name: str
-    student_id: str # 학번 추가
+    student_id: str = "" # 학번 추가 # 백엔드 API 연동 : 기본값을 주어 에러 방지
     vecs: List[List[float]]
     template: List[float]
 
@@ -61,7 +70,21 @@ def load_gallery(path: str) -> Dict[str, Identity]:
         return {}
     with open(path, "r", encoding="utf-8") as f:
         raw = json.load(f)
-    return {k: Identity(**v) for k, v in raw.items()}
+
+    # 기존 코드 주석 처리
+    # return {k: Identity(**v) for k, v in raw.items()}
+    
+    # 백엔드 API 연동
+    # 🚨 중요: JSON의 key가 무엇이든 상관없이, 내부 데이터의 'student_id'를 Key로 사용
+    gallery = {}
+    for k, v in raw.items():
+        # 만약 예전 데이터라 student_id가 없다면 건너뛰거나 이름으로 대체 방어 로직
+        sid = v.get("student_id", "")
+        if not sid: 
+            continue # 학번 없는 데이터는 무시
+        gallery[sid] = Identity(**v)
+        
+    return gallery
 
 def save_gallery(path: str, gal: Dict[str, Identity]):
     """얼굴 데이터 저장"""
@@ -178,24 +201,53 @@ class FaceRecognizer:
         self.enroll_name = ""
         self.enroll_id = ""
         self.accum_vecs = []
+        
+        # ===== 성능/프레임 스킵 상태 =====
+        self.frame_idx = 0
+        self.last_emb: Optional[np.ndarray] = None
+        self.last_face = None
+        self.infer_times_ms: List[float] = []
 
     # ---------------- 임베딩 추출 ----------------
-    def embed_biggest(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None) -> Tuple[Optional[np.ndarray], Optional[dict]]:
-        """가장 큰 얼굴을 선택하여 임베딩 추출"""
+    def _embed_biggest_once(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None) -> Tuple[Optional[np.ndarray], Optional[dict]]:
+        """프레임스킵/캐시 없이, 실제로 한 번 추론"""
         faces = self.app.get(frame_bgr) if rrect is None else get_faces_in_rrect(self.app, frame_bgr, *rrect)
         if not faces:
             return None, None
 
-        # 가장 큰 얼굴 선택
         faces.sort(key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]), reverse=True)
         f = faces[0]
 
-        # 정규화된 임베딩 추출
         emb = getattr(f, "normed_embedding", None)
         if emb is None:
             e = f.embedding
             emb = e / np.linalg.norm(e)
         return emb.astype("float32"), f
+
+    def embed_biggest(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None, use_skip: bool = False) -> Tuple[Optional[np.ndarray], Optional[dict]]:
+        """
+        use_skip=False  : 매 호출마다 실제 추론 (Baseline / 등록용)
+        use_skip=True   : FRAME_SKIP에 따라 추론 간헐 실행 + 결과 캐시
+        """
+        # 프레임 인덱스 증가
+        self.frame_idx += 1
+
+        run_infer = (not use_skip) or (self.frame_idx % FRAME_SKIP == 0) or (self.last_emb is None)
+
+        if run_infer:
+            t0 = time.perf_counter()
+            emb, face = self._embed_biggest_once(frame_bgr, rrect)
+            t1 = time.perf_counter()
+
+            if emb is not None:
+                self.infer_times_ms.append((t1 - t0) * 1000.0)  # ms 기록
+
+            self.last_emb, self.last_face = emb, face
+        else:
+            # 추론 스킵 → 직전 결과 재사용
+            emb, face = self.last_emb, self.last_face
+
+        return emb, face
 
     # ---------------- 인증 ----------------
     def identify_face(self, embedding: np.ndarray) -> Tuple[bool, Optional[str], Optional[float]]:
@@ -203,18 +255,37 @@ class FaceRecognizer:
         if not self.gallery:
             return False, None, 0.0
 
-        sims = [(name, cos_sim(embedding, np.asarray(ident.template, np.float32))) for name, ident in self.gallery.items()]
-        sims.sort(key=lambda x: x[1], reverse=True)
-        name_top, s_top = sims[0]
-        s_2nd = sims[1][1] if len(sims) > 1 else -1.0
+        # 백엔드 API 연동
+        # 🚨 Key가 이제 student_id 입니다.
+        sims = []
+        for student_id, ident in self.gallery.items():
+            score = cos_sim(embedding, np.asarray(ident.template, np.float32))
+            sims.append((student_id, score))
 
-        # 인증 조건
+        sims.sort(key=lambda x: x[1], reverse=True)
+        found_id, s_top = sims[0] # 가장 유사한 학번
+        s_2nd = sims[1][1] if len(sims) > 1 else -1.0
+        
         ok_match = (
             s_top >= THRESHOLD
             and (s_top - s_2nd) >= MARGIN_TOP2
-            and len(self.gallery[name_top].vecs) >= MIN_SAMPLES_ID
+            and len(self.gallery[found_id].vecs) >= MIN_SAMPLES_ID
         )
-        return (True, name_top, s_top) if ok_match else (False, None, s_top)
+        return (True, found_id, s_top) if ok_match else (False, None, s_top)
+
+        # 기존 코드 주석화
+        # sims = [(name, cos_sim(embedding, np.asarray(ident.template, np.float32))) for name, ident in self.gallery.items()]
+        # sims.sort(key=lambda x: x[1], reverse=True)
+        # name_top, s_top = sims[0]
+        # s_2nd = sims[1][1] if len(sims) > 1 else -1.0
+
+        # 인증 조건
+        # ok_match = (
+        #     s_top >= THRESHOLD
+        #     and (s_top - s_2nd) >= MARGIN_TOP2
+        #     and len(self.gallery[name_top].vecs) >= MIN_SAMPLES_ID
+        # )
+        # return (True, name_top, s_top) if ok_match else (False, None, s_top)
 
     # ---------------- 등록 ----------------
     def start_enrollment(self, name: str, student_id: str = ""):
@@ -225,13 +296,39 @@ class FaceRecognizer:
         self.accum_vecs = []
 
     def accumulate_sample(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None) -> Tuple[bool, int]:
-        """임베딩 샘플을 누적하고 현재 샘플 수 반환"""
+        """등록 샘플 누적 (항상 실제 추론 실행)"""
         if not self.is_enrolling:
             return False, 0
 
-        emb, _ = self.embed_biggest(frame_bgr, rrect)
+        emb, _ = self.embed_biggest(frame_bgr, rrect, use_skip=False)
         if emb is not None:
             self.accum_vecs.append(emb.copy())
+
+            # 백엔드 API 연동
+            # 2. [API 추가] 추출된 임베딩을 서버로 전송
+            try:
+                # numpy 배열을 리스트로 변환하여 전송
+                embedding_list = emb.tolist() 
+                
+                payload = {
+                    "sid": self.enroll_id,
+                    "embedding": embedding_list
+                }
+                
+                # 🚨 비동기 처리가 필요할 수 있음 (UI 멈춤 방지)
+                # 현재는 간단히 동기 요청으로 작성 (requests.post는 응답 올 때까지 멈춤)
+                response = requests.post(f"{AWS_BASE_URL}/user/enroll/sample", json=payload)
+                
+                if response.status_code == 200:
+                    print(f"-> [Server] Sample sent ({len(self.accum_vecs)})")
+                else:
+                    print(f"-> [Server Error] {response.status_code}: {response.text}")
+                    
+            except Exception as e:
+                print(f"-> [Network Error] Failed to send sample: {e}")
+
+
+
             return True, len(self.accum_vecs)
         return False, len(self.accum_vecs)
 
@@ -241,19 +338,44 @@ class FaceRecognizer:
         if not self.enroll_name.strip() or len(self.accum_vecs) < MIN_SAMPLES_ID:
             print(f"-> Enrollment failed: Not enough samples ({len(self.accum_vecs)}/{MIN_SAMPLES_ID}) or invalid name.")
             return False
-
+        
+        # 백엔드 API 연동
+        # [API 추가] 서버에 최종 등록 요청
+        try:
+            payload = {
+                "sid": self.enroll_id,
+                "name": self.enroll_name
+            }
+            
+            response = requests.post(f"{AWS_BASE_URL}/user/enroll/finish", json=payload)
+            
+            if response.status_code == 200:
+                print(f"-> [Server] Enrollment Finished for {self.enroll_name}")
+                # return True
+            else:
+                print(f"-> [Server Error] Finish failed: {response.text}")
+                return False
+                
+        except Exception as e:
+            print(f"-> [Network Error] Failed to finish enrollment: {e}")
+            return False
+        
+        # 로컬 갤러리 저장 로직
         vecs = np.stack(self.accum_vecs, axis=0)
         tmpl = (vecs.mean(axis=0) / np.linalg.norm(vecs.mean(axis=0))).astype("float32")
 
-        # 기존 인물 갤러리 업데이트 or 신규 등록
-        if self.enroll_name in self.gallery:
-            self.gallery[self.enroll_name].vecs += [v.tolist() for v in vecs]
-            old = np.asarray(self.gallery[self.enroll_name].template, np.float32)
+        # 🚨 Key를 self.enroll_id (학번)으로 사용!
+        if self.enroll_id in self.gallery:
+            # 기존 학번 데이터 업데이트
+            self.gallery[self.enroll_id].vecs += [v.tolist() for v in vecs]
+            old = np.asarray(self.gallery[self.enroll_id].template, np.float32)
             new = (old + tmpl) / np.linalg.norm(old + tmpl)
-            self.gallery[self.enroll_name].template = new.tolist()
-            self.gallery[self.enroll_name].student_id = self.enroll_id
+            self.gallery[self.enroll_id].template = new.tolist()
+            # 이름이 바뀌었을 수도 있으므로 업데이트
+            self.gallery[self.enroll_id].name = self.enroll_name
         else:
-            self.gallery[self.enroll_name] = Identity(
+            # 신규 등록
+            self.gallery[self.enroll_id] = Identity(
                 name=self.enroll_name,
                 student_id=self.enroll_id,
                 vecs=[v.tolist() for v in vecs],
@@ -261,5 +383,238 @@ class FaceRecognizer:
             )
 
         save_gallery(GALLERY_PATH, self.gallery)
+        print(f"-> Saved '{self.enroll_name}' (ID: {self.enroll_id})")
+        return True
+
+        # 기존 코드 주석화
+
+        # vecs = np.stack(self.accum_vecs, axis=0)
+        # tmpl = (vecs.mean(axis=0) / np.linalg.norm(vecs.mean(axis=0))).astype("float32")
+
+        # # 기존 인물 갤러리 업데이트 or 신규 등록
+        # if self.enroll_name in self.gallery:
+        #     self.gallery[self.enroll_name].vecs += [v.tolist() for v in vecs]
+        #     old = np.asarray(self.gallery[self.enroll_name].template, np.float32)
+        #     new = (old + tmpl) / np.linalg.norm(old + tmpl)
+        #     self.gallery[self.enroll_name].template = new.tolist()
+        #     self.gallery[self.enroll_name].student_id = self.enroll_id
+        # else:
+        #     self.gallery[self.enroll_name] = Identity(
+        #         name=self.enroll_name,
+        #         student_id=self.enroll_id,
+        #         vecs=[v.tolist() for v in vecs],
+        #         template=tmpl.tolist(),
+        #     )
+            
+    def reset_stats(self):
+        self.frame_idx = 0
+        self.last_emb = None
+        self.last_face = None
+        self.infer_times_ms.clear()
+
+    def get_latency_stats(self):
+        if not self.infer_times_ms:
+            return {"count": 0, "mean_ms": 0.0, "p95_ms": 0.0}
+        arr = np.asarray(self.infer_times_ms, dtype=np.float32)
+        return {
+            "count": int(len(arr)),
+            "mean_ms": float(arr.mean()),
+            "p95_ms": float(np.percentile(arr, 95)),
+        }
+
+        save_gallery(GALLERY_PATH, self.gallery)
         print(f"-> Saved '{self.enroll_name}' ({len(vecs)} samples)")
         return True
+
+
+# ====================================================================
+# 네트워크 워커 (백그라운드 스레드용)
+# ====================================================================
+# class EnrollmentWorker(QObject):
+#     """
+#     메인 화면을 멈추지 않고 백그라운드에서 AWS 서버로 데이터를 전송하는 비서입니다.
+#     """
+#     def __init__(self):
+#         super().__init__()
+
+#     @Slot(str, list)
+#     def send_sample(self, sid, embedding):
+#         """ [API] 샘플 전송 """
+#         try:
+#             payload = {"sid": sid, "embedding": embedding}
+#             # 🚨 main.py에 /user prefix가 있으므로 경로 수정됨 (/user 추가)
+#             url = f"{AWS_BASE_URL}/user/enroll/sample"
+            
+#             # requests.post는 동기 함수지만, 이 코드는 별도 스레드에서 돌기 때문에 UI 멈춤 없음
+#             response = requests.post(url, json=payload, timeout=2.0)
+            
+#             if response.status_code == 200:
+#                 print(f"📤 [Worker] Sample sent success for {sid}")
+#             else:
+#                 print(f"⚠️ [Worker] Sample send failed: {response.status_code} - {response.text}")
+                
+#         except Exception as e:
+#             print(f"❌ [Worker] Network Error (Sample): {e}")
+
+#     @Slot(str, str)
+#     def finish_session(self, sid, name):
+#         """ [API] 등록 완료 요청 """
+#         try:
+#             payload = {"sid": sid, "name": name}
+#             # 🚨 main.py에 /user prefix가 있으므로 경로 수정됨 (/user 추가)
+#             url = f"{AWS_BASE_URL}/user/enroll/finish"
+            
+#             response = requests.post(url, json=payload, timeout=5.0)
+            
+#             if response.status_code == 200:
+#                 print(f"✅ [Worker] Enrollment FINISHED for {name}({sid})")
+#             else:
+#                 print(f"⚠️ [Worker] Finish failed: {response.status_code} - {response.text}")
+                
+#         except Exception as e:
+#             print(f"❌ [Worker] Network Error (Finish): {e}")
+
+
+# ====================================================================
+# FaceRecognizer 클래스 (쓰레드 사용 버전)
+# ====================================================================
+
+# class FaceRecognizer(QObject): # 💡 QObject 상속 필수
+#     """얼굴 인식 및 등록 기능을 담당하는 클래스"""
+    
+#     # 비서에게 보낼 신호(Signal) 정의
+#     sig_send_sample = Signal(str, list)   # (학번, 임베딩리스트)
+#     sig_finish_enroll = Signal(str, str)  # (학번, 이름)
+
+#     def __init__(self):
+#         super().__init__() # QObject 초기화
+        
+#         # 1. AI 모델 초기화
+#         self.app = FaceAnalysis(name=MODEL_PACK, providers=["CPUExecutionProvider"])
+#         self.app.prepare(ctx_id=0, det_size=DET_SIZE)
+#         self.gallery = load_gallery(GALLERY_PATH) # 로컬 갤러리 (인증용)
+#         print(f"[FaceRecognizer] Gallery loaded: {list(self.gallery.keys())}")
+
+#         # 2. 비서(Worker) 및 쓰레드 생성
+#         self.thread = QThread()
+#         self.worker = EnrollmentWorker()
+#         self.worker.moveToThread(self.thread) # 비서를 별도 쓰레드로 이동
+        
+#         # 3. 신호 연결 (선생님 명령 -> 비서 실행)
+#         self.sig_send_sample.connect(self.worker.send_sample)
+#         self.sig_finish_enroll.connect(self.worker.finish_session)
+        
+#         # 4. 쓰레드 시작
+#         self.thread.start()
+#         print("[FaceRecognizer] Background worker thread started.")
+
+#         # 등록 상태 변수
+#         self.is_enrolling = False
+#         self.enroll_name = ""
+#         self.enroll_id = ""
+#         self.accum_vecs = []
+        
+#         # 성능/프레임 스킵 상태
+#         self.frame_idx = 0
+#         self.last_emb: Optional[np.ndarray] = None
+#         self.last_face = None
+#         self.infer_times_ms: List[float] = []
+
+#     # ---------------- 임베딩 추출 ----------------
+#     def _embed_biggest_once(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None) -> Tuple[Optional[np.ndarray], Optional[dict]]:
+#         """실제 추론 실행"""
+#         faces = self.app.get(frame_bgr) if rrect is None else get_faces_in_rrect(self.app, frame_bgr, *rrect)
+#         if not faces: return None, None
+        
+#         faces.sort(key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]), reverse=True)
+#         f = faces[0]
+        
+#         emb = getattr(f, "normed_embedding", None)
+#         if emb is None:
+#             e = f.embedding
+#             emb = e / np.linalg.norm(e)
+#         return emb.astype("float32"), f
+
+#     def embed_biggest(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None, use_skip: bool = False) -> Tuple[Optional[np.ndarray], Optional[dict]]:
+#         """프레임 스킵 적용 임베딩 추출"""
+#         self.frame_idx += 1
+#         run_infer = (not use_skip) or (self.frame_idx % FRAME_SKIP == 0) or (self.last_emb is None)
+
+#         if run_infer:
+#             t0 = time.perf_counter()
+#             emb, face = self._embed_biggest_once(frame_bgr, rrect)
+#             t1 = time.perf_counter()
+#             if emb is not None: self.infer_times_ms.append((t1 - t0) * 1000.0)
+#             self.last_emb, self.last_face = emb, face
+#         else:
+#             emb, face = self.last_emb, self.last_face
+#         return emb, face
+
+#     # ---------------- 인증 (로컬 갤러리 사용) ----------------
+#     def identify_face(self, embedding: np.ndarray) -> Tuple[bool, Optional[str], Optional[float]]:
+#         if not self.gallery: return False, None, 0.0
+#         sims = [(name, cos_sim(embedding, np.asarray(ident.template, np.float32))) for name, ident in self.gallery.items()]
+#         sims.sort(key=lambda x: x[1], reverse=True)
+#         name_top, s_top = sims[0]
+#         s_2nd = sims[1][1] if len(sims) > 1 else -1.0
+#         ok_match = (s_top >= THRESHOLD and (s_top - s_2nd) >= MARGIN_TOP2 and len(self.gallery[name_top].vecs) >= MIN_SAMPLES_ID)
+#         return (True, name_top, s_top) if ok_match else (False, None, s_top)
+
+#     # ---------------- 등록 (AWS 서버 연동 + 쓰레드) ----------------
+#     def start_enrollment(self, name: str, student_id: str = ""):
+#         """등록 시작 (로컬 초기화)"""
+#         self.is_enrolling = True
+#         self.enroll_name = name
+#         self.enroll_id = student_id
+#         self.accum_vecs = []
+#         print(f"-> Start enrollment locally for {name} ({student_id})")
+
+#     def accumulate_sample(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None) -> Tuple[bool, int]:
+#         """등록 샘플 수집 및 비동기 전송"""
+#         if not self.is_enrolling: return False, 0
+
+#         # 1. 얼굴 특징 추출 (CPU 작업 - 메인 쓰레드)
+#         emb, _ = self.embed_biggest(frame_bgr, rrect, use_skip=False)
+        
+#         if emb is not None:
+#             # 2. 로컬 카운팅을 위해 저장
+#             self.accum_vecs.append(emb)
+
+#             # 3. [핵심] 비서에게 "서버로 보내!" 신호 발송 (Non-blocking)
+#             # numpy 배열을 리스트로 변환하여 전달
+#             self.sig_send_sample.emit(self.enroll_id, emb.tolist())
+            
+#             return True, len(self.accum_vecs)
+            
+#         return False, len(self.accum_vecs)
+
+#     def finish_enrollment(self) -> bool:
+#         """등록 완료 요청"""
+#         self.is_enrolling = False
+#         if len(self.accum_vecs) < MIN_SAMPLES_ID:
+#             print("-> Not enough samples.")
+#             return False
+
+#         # [핵심] 비서에게 "등록 마쳐!" 신호 발송 (Non-blocking)
+#         self.sig_finish_enroll.emit(self.enroll_id, self.enroll_name)
+        
+#         # UI 전환을 위해 즉시 True 반환
+#         return True
+
+#     # ---------------- 기타 ----------------
+#     def reset_stats(self):
+#         self.frame_idx = 0
+#         self.last_emb = None
+#         self.last_face = None
+#         self.infer_times_ms.clear()
+
+#     def get_latency_stats(self):
+#         if not self.infer_times_ms: return {"count": 0, "mean_ms": 0.0, "p95_ms": 0.0}
+#         arr = np.asarray(self.infer_times_ms, dtype=np.float32)
+#         return {"count": int(len(arr)), "mean_ms": float(arr.mean()), "p95_ms": float(np.percentile(arr, 95))}
+
+#     def __del__(self):
+#         """종료 시 쓰레드 정리"""
+#         if hasattr(self, 'thread'):
+#             self.thread.quit()
+#             self.thread.wait()

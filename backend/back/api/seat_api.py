@@ -6,6 +6,7 @@ from ..utils.helper_functions import error_response, success_response, format_db
 import base64
 from datetime import datetime, timedelta, timezone
 
+from database import get_db_connection # database.py에 정의된 초기화 함수 임포트
 
 router = APIRouter()
 
@@ -78,7 +79,11 @@ async def reserve_seat_handler(data: Dict[str, Any]):
     now_kst = datetime.now(KST)
 
     reservation_date = now_kst.strftime('%Y-%m-%d')
-    start_time_str = now_kst.strftime('%H:%M:%S')
+    # start_time_str = now_kst.strftime('%H:%M:%S')
+    
+    FULL_FORMAT = '%Y-%m-%d %H:%M:%S'
+    start_time_str = now_kst.strftime(FULL_FORMAT)
+    end_time_str = end_time_dt.strftime(FULL_FORMAT)
 
     # 3시간 후 계산 (날짜가 바뀌는 경우는 일단 무시)
     end_time_dt = now_kst + timedelta(hours=3)
@@ -398,3 +403,43 @@ async def extend_seat_reservation_handler(data: Dict[str, Any]):
         status_code=status.HTTP_201_CREATED,
         data={"reservation_id": res_id}
     )
+
+# seat_api.py 맨 아래에 추가
+
+@router.get("/stats")
+async def get_seat_stats_handler():
+    """
+    [API Handler] 각 열람실별 총 좌석 수와 현재 사용 중인 좌석 수를 반환합니다.
+    """
+    # 실제로는 DB의 study_room_status 테이블이나 seat_reservation을 조회해야 합니다.
+    # 여기서는 예시로 seat_reservation 테이블에서 room_id별 개수를 센다고 가정합니다.
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # 각 열람실별 현재 활성화된(return_time이 NULL인) 예약 수 조회
+    sql = """
+        SELECT room_id, COUNT(*) as used_count 
+        FROM seat_reservation 
+        WHERE return_time IS NULL 
+        GROUP BY room_id
+    """
+    cursor.execute(sql)
+    rows = cursor.fetchall()
+    conn.close()
+    
+    # 초기 데이터 (총 좌석 수는 고정값이거나 study_room 테이블에서 가져와야 함)
+    stats = {
+        "1": {"total": 375, "current": 0},       # 제1열람실
+        "2-1": {"total": 269, "current": 0},     # 제2-1열람실
+        "2-2": {"total": 134, "current": 0},     # 제2-2열람실
+        "2-2_grad": {"total": 62, "current": 0}  # 대학원생
+    }
+    
+    for row in rows:
+        rid = row['room_id']
+        count = row['used_count']
+        if rid in stats:
+            stats[rid]['current'] = count
+            
+    return success_response(message="STATS_SUCCESS", status_code=200, data=stats)

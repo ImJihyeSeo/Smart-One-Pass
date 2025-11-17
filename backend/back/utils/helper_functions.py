@@ -1,5 +1,3 @@
-# utils/helper_functions.py
-
 from typing import List, Dict, Any, Optional, Tuple, Union
 
 # Note: sqlite3.Row 타입을 사용하기 위해 sqlite3 모듈을 import합니다.
@@ -67,14 +65,17 @@ def format_db_rows_to_json(
     if not db_rows:
         return []
     
-    json_list = []
+    # json_list = []
+    # 2. psycopg2의 RealDictRow 객체를 순수 dict로 변환
+    # (FastAPI가 RealDictRow도 잘 처리하지만, dict로 명시적 변환하는 것이 안전합니다.)
+    json_list = [dict(row) for row in db_rows]
     
     # 2. 각 행(Row)을 반복하며 dict() 함수로 딕셔너리 리스트를 만듭니다.
     # for row in db_rows:
     #     # sqlite3.Row 객체는 dict()으로 변환되어야 클라이언트가 원하는 JSON 형태가 됩니다.
     #     json_list.append(row)
         
-    json_list = [row for row in db_rows]
+    # json_list = [row for row in db_rows]
     
     return json_list
 

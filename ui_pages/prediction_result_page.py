@@ -48,6 +48,32 @@ class PredictionResultPage(BasePage):
         main_layout.addWidget(card_frame, alignment=Qt.AlignHCenter)
         main_layout.addStretch(1)
 
+    # 예측 모델 연동
+    # ★ [NEW] 이 함수를 추가하세요! 백엔드 데이터를 받아 화면을 갱신합니다.
+    def update_ui(self, result_data: list):
+        """
+        백엔드 API 결과(result_data)를 받아서 카드를 동적으로 생성합니다.
+        result_data 구조: [{'name': '...', 'status': '여유', 'color': '#...'}, ...]
+        """
+        # 1. 기존 카드들 모두 지우기 (초기화)
+        while self.grid_layout.count():
+            item = self.grid_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        # 2. 새 데이터로 카드 생성
+        for i, data in enumerate(result_data):
+            # _create_status_card 함수는 data 딕셔너리를 그대로 사용하도록 설계되어 있으므로
+            # 백엔드에서 키값('name', 'status', 'color')만 맞춰주면 완벽하게 호환됩니다.
+            card = self._create_status_card(data, i)
+            
+            row = i // 2
+            col = i % 2
+            self.grid_layout.addWidget(card, row, col)
+            
+        print("✅ 프론트엔드 화면 갱신 완료")
+        
     def _get_page_style(self):
         return """
             #PredictionResultPage {
