@@ -3,6 +3,7 @@ from dataclasses import dataclass, asdict
 from typing import Dict, List, Tuple, Optional
 from PIL import Image, ImageDraw, ImageFont
 from insightface.app import FaceAnalysis
+from .anti_spoofing_detector import AntiSpoofingDetector
 
 # ====================================================================
 # 환경 설정
@@ -172,6 +173,7 @@ class FaceRecognizer:
         self.app = FaceAnalysis(name=MODEL_PACK, providers=["CPUExecutionProvider"])
         self.app.prepare(ctx_id=0, det_size=DET_SIZE)
         self.gallery = load_gallery(GALLERY_PATH)
+        self.anti_spoof_detector = AntiSpoofingDetector() 
         print(f"[FaceRecognizer] Gallery loaded: {list(self.gallery.keys())}")
 
         # 등록 상태 변수
@@ -191,18 +193,25 @@ class FaceRecognizer:
         """프레임스킵/캐시 없이, 실제로 한 번 추론"""
         faces = self.app.get(frame_bgr) if rrect is None else get_faces_in_rrect(self.app, frame_bgr, *rrect)
         if not faces:
-            return None, None
+            return None, None, False
 
         faces.sort(key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]), reverse=True)
         f = faces[0]
 
+        # 스푸핑 검사
+        is_live, live_score = self.anti_spoof_detector.detect_spoofing(frame_bgr, f.bbox)
+        print(f"[AntiSpoofing] Score: {live_score:.4f}")
+        if not is_live:
+            # 임베딩 추출 중단
+            return None, f, False
+        
         emb = getattr(f, "normed_embedding", None)
         if emb is None:
             e = f.embedding
             emb = e / np.linalg.norm(e)
-        return emb.astype("float32"), f
+        return emb.astype("float32"), f, True
 
-    def embed_biggest(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None, use_skip: bool = False) -> Tuple[Optional[np.ndarray], Optional[dict]]:
+    def embed_biggest(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None, use_skip: bool = False) -> Tuple[Optional[np.ndarray], Optional[dict], bool]:
         """
         use_skip=False  : 매 호출마다 실제 추론 (Baseline / 등록용)
         use_skip=True   : FRAME_SKIP에 따라 추론 간헐 실행 + 결과 캐시
@@ -211,21 +220,24 @@ class FaceRecognizer:
         self.frame_idx += 1
 
         run_infer = (not use_skip) or (self.frame_idx % FRAME_SKIP == 0) or (self.last_emb is None)
+        is_live = False
 
         if run_infer:
             t0 = time.perf_counter()
-            emb, face = self._embed_biggest_once(frame_bgr, rrect)
+            emb, face, is_live = self._embed_biggest_once(frame_bgr, rrect)
             t1 = time.perf_counter()
 
             if emb is not None:
                 self.infer_times_ms.append((t1 - t0) * 1000.0)  # ms 기록
 
             self.last_emb, self.last_face = emb, face
+            self.last_is_live = is_live
         else:
             # 추론 스킵 → 직전 결과 재사용
             emb, face = self.last_emb, self.last_face
+            is_live = getattr(self, 'last_is_live', False)
 
-        return emb, face
+        return emb, face, is_live
 
     # ---------------- 인증 ----------------
     def identify_face(self, embedding: np.ndarray) -> Tuple[bool, Optional[str], Optional[float]]:

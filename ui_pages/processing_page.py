@@ -183,7 +183,7 @@ class ProcessingPage(BasePage):
         guide_y2 = guide_y1 + guide_width
         
         # 얼굴 감지 / 임베딩 추출
-        emb, face_obj = self.face_rec.embed_biggest(frame, rrect, use_skip=True)
+        emb, face_obj, is_live = self.face_rec.embed_biggest(frame, rrect, use_skip=True)
 
         # 가이드라인 영역에 얼굴 중심 있는지 확인 (InsightFace 결과만 사용)
         face_in_guide = False
@@ -196,8 +196,20 @@ class ProcessingPage(BasePage):
         # --------------------------
         # UI 상태 제어
         # --------------------------
-        if face_in_guide and emb is not None: # 얼굴이 UI 가이드라인 내 + AI가 임베딩을 추출
-            # 얼굴 인식 중
+
+        # 1. 스푸핑 실패 (감지 성공)
+        if face_in_guide and not is_live: 
+            if self.guide_animation.state() == QAbstractAnimation.Running:
+                self.guide_animation.stop()
+            self.guide_opacity_effect.setOpacity(1.0) 
+            self.start_time = None
+            
+            self.instruction.setText("※ 스푸핑 감지! 실제 얼굴이 아닙니다! ※")
+            self.instruction.setStyleSheet(f"{GUIDE_STYLE} color: #ff4444;")            
+            self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(255, 0, 0, 150); border-radius: {self.BORDER_RADIUS}px; }}") 
+        
+        # 2. 정상적인 얼굴 인식
+        elif face_in_guide and emb is not None and is_live: 
             if self.start_time is None:
                 self.start_time = time.time()
                 self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(0, 0, 0, 40); border-radius: {self.BORDER_RADIUS}px; }}")
@@ -206,6 +218,7 @@ class ProcessingPage(BasePage):
                 self.guide_animation.start()
                 
             self.instruction.setText(f"얼굴을 인식 중입니다. 잠시만 기다려주세요.")
+            self.instruction.setStyleSheet(GUIDE_STYLE)
 
             elapsed = time.time() - self.start_time
             if elapsed >= self.duration:
@@ -250,13 +263,15 @@ class ProcessingPage(BasePage):
                     result_data = (success, self.retries, name) 
                 
                 self.switch_callback("result", result_data, mode=self.mode)
+        
+        # 3. 얼굴 미감지
         else:
-            # 얼굴 미감지 시
             if self.guide_animation.state() == QAbstractAnimation.Running:
                 self.guide_animation.stop()
             self.guide_opacity_effect.setOpacity(1.0) 
             self.start_time = None
             self.instruction.setText("※ 얼굴 인식을 시작하려면 화면을 바라봐주세요 ※")
+            self.instruction.setStyleSheet(GUIDE_STYLE)
             self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(0, 0, 0, 80); border-radius: {self.BORDER_RADIUS}px; }}")
 
         # QPixmap으로 변환
