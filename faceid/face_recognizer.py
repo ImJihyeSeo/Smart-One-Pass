@@ -381,6 +381,22 @@ class FaceRecognizer:
                 vecs=[v.tolist() for v in vecs],
                 template=tmpl.tolist(),
             )
+            
+    def reset_stats(self):
+        self.frame_idx = 0
+        self.last_emb = None
+        self.last_face = None
+        self.infer_times_ms.clear()
+
+    def get_latency_stats(self):
+        if not self.infer_times_ms:
+            return {"count": 0, "mean_ms": 0.0, "p95_ms": 0.0}
+        arr = np.asarray(self.infer_times_ms, dtype=np.float32)
+        return {
+            "count": int(len(arr)),
+            "mean_ms": float(arr.mean()),
+            "p95_ms": float(np.percentile(arr, 95)),
+        }
 
         save_gallery(GALLERY_PATH, self.gallery)
         print(f"-> Saved '{self.enroll_name}' (ID: {self.enroll_id})")
