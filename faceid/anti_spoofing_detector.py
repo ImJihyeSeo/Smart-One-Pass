@@ -9,7 +9,7 @@ MODEL_PATH = os.path.join(
     BASE_DIR, 
     "anti_spoofing", 
     "models", 
-    "AntiSpoofing_print-replay_1.5_128.onnx"
+    "AntiSpoofing_bin_1.5_128.onnx"
 )
 
 INPUT_SIZE = (128, 128)

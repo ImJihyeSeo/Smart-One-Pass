@@ -200,7 +200,7 @@ class FaceRecognizer:
 
         # 스푸핑 검사
         is_live, live_score = self.anti_spoof_detector.detect_spoofing(frame_bgr, f.bbox)
-        print(f"[AntiSpoofing] Score: {live_score:.4f}")
+        # print(f"[AntiSpoofing] Score: {live_score:.4f}")
         if not is_live:
             # 임베딩 추출 중단
             return None, f, False
