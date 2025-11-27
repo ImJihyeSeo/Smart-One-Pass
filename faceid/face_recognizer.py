@@ -281,8 +281,18 @@ class FaceRecognizer(QObject): # 💡 QObject 상속 필수
             url = f"{AWS_BASE_URL}/access/identify"
             response = requests.post(url, json=payload, timeout=1.0) # 1초 안에 답 안 오면 포기
             
+            # if response.status_code == 200:
+            #     res_json = response.json()
+            #     data = res_json.get("data", {})
+
+            # [수정 후 코드] (이걸로 교체하세요!)
             if response.status_code == 200:
                 res_json = response.json()
+                
+                # 🚨 [방어 코드 추가] 리스트로 오면 첫 번째 요소(딕셔너리)를 꺼냅니다.
+                if isinstance(res_json, list):
+                    res_json = res_json[0]
+                    
                 data = res_json.get("data", {})
                 
                 if data.get("found") is True:

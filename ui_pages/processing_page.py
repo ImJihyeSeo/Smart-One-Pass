@@ -281,10 +281,26 @@ class ProcessingPage(BasePage):
                             payload = {"sid": student_id}
                             response = requests.post(f"{API_BASE_URL}/access/record", json=payload)
                             
-                            if response.status_code == 201:
-                                print(f"[Access] Success: {response.json().get('message')}")
+                            # if response.status_code == 201:
+                            #     print(f"[Access] Success: {response.json().get('message')}")
+                            # else:
+                            #     print(f"[Access] Failed: {response.text}")
+                            
+                            if response.status_code == 200 or response.status_code == 201:
+                                res_json = response.json()
+                                
+                                # 🚨 [추가] 서버가 리스트로 보냈을 경우, 첫 번째 요소만 꺼내기
+                                if isinstance(res_json, list):
+                                    res_json = res_json[0]
+                                    
+                                # 이제 res_json은 항상 딕셔너리({})가 됩니다.
+                                if res_json.get("success"):
+                                    print(f"✅ [Access] Success: {res_json.get('message')}")
+                                    # (성공 처리 로직...)
+                                else:
+                                    print(f"❌ [Access] Failed: {res_json}")
                             else:
-                                print(f"[Access] Failed: {response.text}")
+                                print(f"❌ [Access] HTTP Error: {response.status_code}")
                                 
                         except Exception as e:
                             print(f"Network Error during access record: {e}")
