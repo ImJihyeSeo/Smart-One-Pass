@@ -38,7 +38,7 @@ class WorkerThread(QThread):
         super().__init__()
         self.name = name
         self.student_id = student_id
-        self.api_url = f"{AWS_BASE_URL}/user/check-existence"
+        self.api_url = f"{AWS_BASE_URL}/user/prev_exist"
 
     def run(self):
         """API 호출 로직을 실행합니다."""
