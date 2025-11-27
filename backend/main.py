@@ -6,14 +6,6 @@ import joblib
 import pandas as pd
 import os
 
-# 이제 os.environ.get("DATABASE_URL") 등을 통해 접근 가능합니다.
-# (나머지 FastAPI 코드는 그대로 유지)
-
-# 1. [서버 켤 때] 모델을 로딩합니다. (요리사가 출근해서 레시피 펼치기)
-# 같은 폴더에 있으니까 경로 없이 파일명만 쓰면 됩니다.
-model = joblib.load("final_library_model.pkl") 
-print("✅ 모델 로딩 완료! 예측 준비 끝.")
-
 
 # 1. 현재 파일(main.py)이 있는 폴더 경로를 찾습니다.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
