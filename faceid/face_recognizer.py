@@ -255,18 +255,52 @@ class FaceRecognizer(QObject): # 💡 QObject 상속 필수
 
     # ---------------- 인증 (로컬 갤러리 사용) ----------------
     def identify_face(self, embedding: np.ndarray) -> Tuple[bool, Optional[str], Optional[float]]:
-        if not self.gallery: return False, None, 0.0
+        # if not self.gallery: return False, None, 0.0
         
-        sims = []
-        for sid, ident in self.gallery.items():
-            sims.append((sid, cos_sim(embedding, np.asarray(ident.template, np.float32))))
+        # sims = []
+        # for sid, ident in self.gallery.items():
+        #     sims.append((sid, cos_sim(embedding, np.asarray(ident.template, np.float32))))
             
-        sims.sort(key=lambda x: x[1], reverse=True)
-        found_id, s_top = sims[0]
-        s_2nd = sims[1][1] if len(sims) > 1 else -1.0
+        # sims.sort(key=lambda x: x[1], reverse=True)
+        # found_id, s_top = sims[0]
+        # s_2nd = sims[1][1] if len(sims) > 1 else -1.0
         
-        ok_match = (s_top >= THRESHOLD and (s_top - s_2nd) >= MARGIN_TOP2 and len(self.gallery[found_id].vecs) >= MIN_SAMPLES_ID)
-        return (True, found_id, s_top) if ok_match else (False, None, s_top)
+        # ok_match = (s_top >= THRESHOLD and (s_top - s_2nd) >= MARGIN_TOP2 and len(self.gallery[found_id].vecs) >= MIN_SAMPLES_ID)
+        # return (True, found_id, s_top) if ok_match else (False, None, s_top)
+        """
+        [수정됨] 로컬 갤러리 대신 중앙 서버(API)에 물어봅니다.
+        """
+        try:
+            # 1. 보낼 데이터 준비 (Numpy 배열을 일반 리스트로 변환)
+            payload = {
+                "embedding": embedding.tolist()
+            }
+            
+            # 2. 서버에 "이 사람 누구예요?" 하고 물어봄 (동기 요청)
+            # 주의: 너무 자주 호출하면 렉이 걸릴 수 있으므로 UI에서 조절 필요
+            url = f"{AWS_BASE_URL}/access/identify"
+            response = requests.post(url, json=payload, timeout=1.0) # 1초 안에 답 안 오면 포기
+            
+            if response.status_code == 200:
+                res_json = response.json()
+                data = res_json.get("data", {})
+                
+                if data.get("found") is True:
+                    found_sid = data.get("sid")
+                    # 서버 인증은 유사도 점수를 따로 안 줄 수도 있어서 1.0(확실함)으로 가정하거나,
+                    # 필요하면 API에서 점수도 같이 보내게 수정 가능. 여기선 일단 성공 처리.
+                    print(f"🔍 [Server Auth] Found: {found_sid}")
+                    return True, found_sid, 0.99 
+                else:
+                    return False, None, 0.0
+            else:
+                print(f"⚠️ Server Identify Failed: {response.status_code}")
+                return False, None, 0.0
+
+        except Exception as e:
+            print(f"❌ Network Error during Identify: {e}")
+            return False, None, 0.0
+        
 
     # ---------------- 등록 (AWS 서버 연동 + 쓰레드) ----------------
     def start_enrollment(self, name: str, student_id: str = ""):

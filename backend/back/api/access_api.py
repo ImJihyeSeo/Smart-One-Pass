@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Dict, Any, Optional, List
 from ..services.core_service import check_student_exists, execute_delete_students, get_student_ID_by_face, check_access_of_student, execute_insert_student, update_student, process_access_record, create_reservation, check_time, get_access_records, get_seat_information, check_time_overlap, get_reservation_status, check_student_inside
 from ..utils.helper_functions import error_response, success_response, format_db_rows_to_json, validate_input
-
+import numpy as np
+import base64
 
 router = APIRouter()
 
@@ -91,3 +92,42 @@ async def record_access_handler(data: Dict[str, Any]):
         message=message, 
         status_code=201
     )
+
+
+# 👇 이 API를 새로 추가하세요!
+@router.post("/identify")
+async def identify_user_handler(data: Dict[str, Any]):
+    """
+    [API] 얼굴 벡터(임베딩)를 받아서 누구인지 식별(Identify)하여 반환
+    """
+    # 1. 클라이언트가 보낸 임베딩(숫자 리스트) 받기
+    embedding_list = data.get("embedding")
+    
+    if not embedding_list:
+        raise HTTPException(status_code=400, detail="EMPTY_EMBEDDING")
+
+    try:
+        # 2. 리스트를 바이트(bytes)로 변환 (core_service가 바이트를 원하므로)
+        # float32 타입의 numpy 배열로 만든 뒤 bytes로 변환
+        emb_array = np.array(embedding_list, dtype=np.float32)
+        emb_bytes = emb_array.tobytes()
+        
+        # 3. DB 뒤져서 누구인지 찾기 (이미 만들어둔 core_service 함수 재활용!)
+        # get_student_ID_by_face는 성공 시 sid를, 실패 시 (False, error)를 반환함
+        result = get_student_ID_by_face(emb_bytes)
+        
+        if isinstance(result, tuple) and result[0] is False:
+             # 못 찾았거나 에러인 경우
+             return success_response(message="IDENTIFY_FAIL", status_code=200, data={"found": False})
+
+        # 4. 찾았으면 성공 응답
+        found_sid = result # sid 문자열
+        return success_response(
+            message="IDENTIFY_SUCCESS", 
+            status_code=200, 
+            data={"found": True, "sid": found_sid}
+        )
+        
+    except Exception as e:
+        print(f"Identify Error: {e}")
+        raise HTTPException(status_code=500, detail="SERVER_ERROR")

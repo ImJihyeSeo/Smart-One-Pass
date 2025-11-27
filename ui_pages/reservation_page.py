@@ -303,7 +303,24 @@ class ReservationPage(BasePage):
             response = requests.get(f"{API_BASE_URL}/seat/stats")
             
             if response.status_code == 200:
-                data = response.json().get("data", {})
+                res_json = response.json().get("data", {})
+
+                # 1. 타입 확인 및 데이터 추출
+                if isinstance(res_json, dict):
+                    # 예상대로 딕셔너리인 경우 ('data' 키 확인)
+                    data = res_json.get("data", {})
+                elif isinstance(res_json, list):
+                    # 만약 리스트로 왔다면, 그대로 사용하거나 첫 번째 요소 사용 (상황에 맞게)
+                    # 여기서는 데이터가 없다고 가정하고 빈 딕셔너리 처리하여 에러 방지
+                    print("Warning: Stats API returned a list, expected dict.")
+                    data = {}
+                else:
+                    data = {}
+
+                # 2. 데이터가 딕셔너리가 아니면 처리 중단 (방어 코드)
+                if not isinstance(data, dict):
+                    print(f"Error: 'data' is not a dict. Type: {type(data)}")
+                    return
                 
                 # 매핑: 백엔드 room_id -> 프론트엔드 표시 이름
                 ID_TO_NAME = {
