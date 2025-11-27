@@ -449,7 +449,6 @@ class ReservationPage(BasePage):
         dialog_buttons = None
         info_message = {}
         dialog_width = None
-        current_reservation = self._get_user_reservation_data() # 예약 정보 가져오기
 
         if title == "안내사항":
             dialog_width = 650
@@ -464,6 +463,7 @@ class ReservationPage(BasePage):
             dialog_buttons = [{'text': '닫기', 'style': 'cancel', 'callback': None}]
             
         elif title == "좌석확인":
+            current_reservation = self._get_user_reservation_data() # 예약 정보 가져오기
             if current_reservation:
                 res = current_reservation
                 styled_seat = f'<span style="color:#3B6EEB;">{res["seat_id"]}</span>'

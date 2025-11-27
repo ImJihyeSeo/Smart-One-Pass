@@ -201,7 +201,7 @@ async def get_seat_status_handler(
     conditions = {k: v for k, v in conditions.items() if v is not None} # None 값 제거
         
     # 1. 조건에 맞는 예약 기록 조회 (SELECT)
-    result = get_reservation_status(table_name='seat_reservation', conditions=conditions)
+    result = get_reservation_status(conditions=conditions)
     
     # 500 DB 실행 오류 확인
     if isinstance(result, tuple) and not result[0]:
