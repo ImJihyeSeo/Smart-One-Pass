@@ -10,7 +10,7 @@ import pandas as pd
 
 # 1. [서버 켤 때] 모델을 로딩합니다. (요리사가 출근해서 레시피 펼치기)
 # 같은 폴더에 있으니까 경로 없이 파일명만 쓰면 됩니다.
-model = joblib.load("final_model.pkl") 
+model = joblib.load("final_library_model.pkl") 
 print("✅ 모델 로딩 완료! 예측 준비 끝.")
 
 # 💡 API 라우터 임포트 (back.api 폴더에서 가져온다고 가정)

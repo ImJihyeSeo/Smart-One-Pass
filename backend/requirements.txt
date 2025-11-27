@@ -4,6 +4,9 @@ pydantic
 psycopg2-binary==2.9.11
 python-dotenv
 numpy
+scikit-learn
+pandas
+joblib
 
 # pip install -r requirements.txt
 # 을 통해서 설치할 것
