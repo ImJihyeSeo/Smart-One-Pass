@@ -3,21 +3,21 @@ from PySide6.QtWidgets import (
     QVBoxLayout
 )
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QSequentialAnimationGroup, QEasingCurve, QAbstractAnimation
-from PySide6.QtGui import QPixmap, QImage, QPainter, QBitmap
+from PySide6.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QBitmap
 
 import cv2
 import time
 
 from ui_style import TARGET_W, TARGET_H, BORDER_RADIUS, fade_in_out, GUIDE_STYLE
-# from cv_tools import detect_faces  <-- 🚨 삭제 (더 이상 안 씀)
+from cv_tools import detect_faces
 from .base_page import BasePage
 
 from faceid.face_recognizer import FaceRecognizer
 
-# 단계별 최소 샘플 수 (테스트용으로 4장)
+# 단계별 최소 샘플 수
 MIN_SAMPLES_PER_INSTRUCTION = 4
 
-# 등록 단계 설정
+# 등록 단계별 [클립 번호 / 시간 / 안내 메시지] 리스트
 ENROLLMENT_STEPS = [
     {"clip": 1, "duration": 10, "instructions": [
         {"text": "정면을 보고 무표정을 유지하세요", "min_samples": MIN_SAMPLES_PER_INSTRUCTION},
@@ -43,7 +43,7 @@ class EnrollmentRecordingPage(BasePage):
         self.switch_callback = switch_callback
         self.user_data = user_data
         self.cap = cap
-        self.face_rec = face_rec    
+        self.face_rec = face_rec    # AI 모델 인스턴스
 
         self.TARGET_W, self.TARGET_H = TARGET_W, TARGET_H
         self.BORDER_RADIUS = BORDER_RADIUS
@@ -53,14 +53,15 @@ class EnrollmentRecordingPage(BasePage):
         self.set_header_spacing(10)
         self.state = "IDLE"
         self.last_state_change_time = time.time()
+        self.clip_start_time = None
        
-        # 샘플 수 계산
+        # 샘플 관련 초기화
         total_instructions = sum(len(step['instructions']) for step in ENROLLMENT_STEPS)
         self.MAX_SAMPLES = total_instructions * MIN_SAMPLES_PER_INSTRUCTION
         self.accum_samples_count = 0
         self.accum_samples_count_current_instruction = 0
 
-        # 얼굴 등록 세션 시작
+        # 얼굴 등록 시작
         self.face_rec.start_enrollment(user_data['name'], user_data.get('student_id', ''))
 
         self.setStyleSheet("QWidget { background: transparent; }")
@@ -68,27 +69,33 @@ class EnrollmentRecordingPage(BasePage):
         main_layout.setAlignment(Qt.AlignTop)
         self.set_header_spacing(-10)
 
-        # 1. 단계 표시 바
+        # --------------------------
+        # 단계 표시 바
+        # --------------------------
         self._init_step_bar(main_layout)
         main_layout.addSpacing(30)
 
-        # 2. 비디오 영역
+        # --------------------------
+        # 비디오 영역
+        # --------------------------
         self.video_label = QLabel()
         self.video_label.setFixedSize(self.TARGET_W, self.TARGET_H)
         self.video_label.setStyleSheet(f"QLabel {{ background-color: #333333; border-radius: {self.BORDER_RADIUS}px; }}")
         main_layout.addWidget(self.video_label, alignment=Qt.AlignCenter)
         main_layout.addSpacing(60)
 
-        # 3. 오버레이 및 메시지
+        # 오버레이 프레임
         self.overlay_frame = QFrame(self.video_label)
         self.overlay_frame.setFixedSize(self.TARGET_W, self.TARGET_H)
         self.set_overlay_opacity(40)  
         self.overlay_frame.setStyleSheet(f"QFrame {{ border-radius: {self.BORDER_RADIUS}px; }}")
 
+        # 상태 메시지 라벨
         self.overlay_status_label = QLabel(None)
         self.overlay_status_label.setStyleSheet(GUIDE_STYLE)
         self.overlay_status_label.hide()
        
+        # 안내 메시지 라벨
         self.instruction_label = QLabel()
         self.instruction_label.setAlignment(Qt.AlignCenter)
         self.instruction_label.setStyleSheet(GUIDE_STYLE)
@@ -101,9 +108,11 @@ class EnrollmentRecordingPage(BasePage):
         main_layout.addWidget(message_container)
         main_layout.addStretch(1)
 
-        # 4. 가이드라인 이미지 (동그란 박스)
+        # --------------------------
+        # 가이드라인
+        # --------------------------
         self.guide_image_label = QLabel(self.video_label)
-        GUIDE_IMAGE_SIZE = 240 # 가이드 크기 살짝 키움
+        GUIDE_IMAGE_SIZE = 220
         self.guide_image_label.setFixedSize(GUIDE_IMAGE_SIZE, GUIDE_IMAGE_SIZE)
         self.guide_image_label.setStyleSheet("background: transparent;")
         self.guide_image_label.move(
@@ -129,18 +138,22 @@ class EnrollmentRecordingPage(BasePage):
         self.guide_animation.addAnimation(anim2)
         self.guide_animation.setLoopCount(-1)
 
-        # 5. 타이머 시작
+        # --------------------------
+        # 프레임 업데이트 타이머
+        # --------------------------
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
        
         self._transition_to_instruction_state()
 
+    # 오버레이 투명도 설정
     def set_overlay_opacity(self, alpha: int):
         self.overlay_frame.setStyleSheet(
             f"QFrame {{ background-color: rgba(0, 0, 0, {alpha}); border-radius: {self.BORDER_RADIUS}px; }}"
         )
 
+    # 단계별 진행 바 초기화
     def _init_step_bar(self, parent_layout):
         self.step_indicator_widget = QWidget()
         self.step_layout = QHBoxLayout(self.step_indicator_widget)
@@ -160,7 +173,9 @@ class EnrollmentRecordingPage(BasePage):
             bar.setStyleSheet(self._get_step_style(i, 0))
             self.progress_bars.append(bar)
 
-            if i > 0: self.step_layout.addSpacing(-2)
+            if i > 0:
+                self.step_layout.addSpacing(-2)
+
             self.step_layout.addWidget(bar)
 
             if i < len(ENROLLMENT_STEPS) - 1:
@@ -173,6 +188,7 @@ class EnrollmentRecordingPage(BasePage):
         parent_layout.addWidget(self.step_indicator_widget, alignment=Qt.AlignCenter)
         parent_layout.addSpacing(20)
 
+    # 단계별 진행 바 스타일
     def _get_step_style(self, index, state):
         if state in (1, 2):
             bg_color = "#005BAC"
@@ -180,55 +196,69 @@ class EnrollmentRecordingPage(BasePage):
         else:
             bg_color = "#ffffff"
             text_color = "#000000"
-        return f"QLabel {{ background-color: {bg_color}; color: {text_color}; border-radius: 5px; font-size: 22px; border: none; padding: 5px; margin: 0px; min-width: 36px; min-height: 36px; }}"
+        return f"""
+            QLabel {{
+                background-color: {bg_color};
+                color: {text_color};
+                border-radius: 5px;
+                font-size: 22px;
+                border: none;
+                padding: 5px;
+                margin: 0px;
+                min-width: 36px;
+                min-height: 36px;
+            }}
+        """
 
+    # --------------------------
+    # 프레임 업데이트
+    # --------------------------
     def update_frame(self):
-        """매 프레임마다 호출되어 얼굴 인식 및 UI 갱신"""
         ret, frame = self.cap.read()
         if not ret: return
 
-        frame = cv2.flip(frame, 1)
+        frame = cv2.flip(frame, 1)  # 좌우 반전
         h, w, _ = frame.shape
         target_h, target_w = self.TARGET_H, self.TARGET_W
 
-        # 비율 맞춰 크롭
         frame_ratio = w / h
         target_ratio = target_w / target_h
+        
         if frame_ratio > target_ratio:
+            # 웹캠 영상이 타겟보다 넓은 경우 (좌우 크롭)
             new_w = int(h * target_ratio)
             start_x = (w - new_w) // 2
             frame = frame[:, start_x:start_x + new_w]
         elif frame_ratio < target_ratio:
+            # 웹캠 영상이 타겟보다 좁은 경우 (상하 크롭)
             new_h = int(w / target_ratio)
             start_y = (h - new_h) // 2
             frame = frame[start_y:start_y + new_h, :]
+
+        # 크롭된 프레임 타겟 크기로 리사이즈해서 채우기
         frame = cv2.resize(frame, (target_w, target_h))
 
-        # 🚨 [수정] 1. AI 모델로 얼굴 특징 및 정보 추출 (가장 중요한 부분)
-        # detect_faces 없이 여기서 나온 face_obj를 바로 사용합니다.
-        emb, face_obj = self.face_rec.embed_biggest(frame)
+        # 얼굴 감지 (UI 상태 관리)
+        guide_width = int(target_w * 0.5)
+        guide_x1 = (target_w - guide_width) // 2
+        guide_y1 = (target_h - guide_width) // 2
+        guide_x2 = guide_x1 + guide_width
+        guide_y2 = guide_y1 + guide_width
 
-        # 🚨 [수정] 2. 가이드 영역 내 얼굴 확인 로직 단순화
+        faces = detect_faces(frame)
         face_in_guide = False
-        
-        if face_obj is not None:
-            # AI가 찾은 얼굴 박스 (x1, y1, x2, y2)
-            bbox = face_obj.bbox.astype(int)
-            cx = (bbox[0] + bbox[2]) // 2
-            cy = (bbox[1] + bbox[3]) // 2
-            
-            # 가이드 박스 범위 (화면 중앙 기준 50% 영역)
-            guide_margin_w = target_w * 0.25 # 좌우 25%씩 여백 -> 중앙 50%
-            guide_margin_h = target_h * 0.20 # 상하 20%씩 여백
-            
-            if (guide_margin_w < cx < target_w - guide_margin_w) and \
-               (guide_margin_h < cy < target_h - guide_margin_h):
+        for (x, y, fw, fh) in faces:
+            cx, cy = x + fw // 2, y + fh // 2
+            if guide_x1 < cx < guide_x2 and guide_y1 < cy < guide_y2:
                 face_in_guide = True
+                break
+       
+        emb, _ = self.face_rec.embed_biggest(frame)
 
-        # --- 상태 진행 로직 ---
+        # UI 상태 전환 / 샘플 누적 처리
         if self.current_step_index >= len(ENROLLMENT_STEPS):
             self.timer.stop()
-            self.show_overlay_message("등록 완료!", 1000)
+            self.show_overlay_message("등록 완료 (시스템 오류 방지)", 1000)
             return
 
         current_step = ENROLLMENT_STEPS[self.current_step_index]
@@ -242,27 +272,28 @@ class EnrollmentRecordingPage(BasePage):
             current_instruction = current_instruction_data["text"]
             required_samples = current_instruction_data["min_samples"]
 
+            # 얼굴 감지 시 샘플 누적
             if self.accum_samples_count_current_instruction < required_samples:
-                # 🚨 [수정] 가이드 안에 있고 + AI가 특징을 뽑았으면(emb) -> 저장
                 if face_in_guide and emb is not None:
                     self.set_overlay_opacity(0)
                     if self.guide_animation.state() != QAbstractAnimation.Running:
                         self.guide_animation.start()
 
-                    # 샘플 저장 및 전송
                     _, self.accum_samples_count = self.face_rec.accumulate_sample(frame)
                     self.accum_samples_count_current_instruction += 1
 
-                    self.instruction_label.setText(f"{current_instruction}\n({self.accum_samples_count_current_instruction}/{required_samples})")
+                    self.instruction_label.setText(f"{current_instruction}\n")
                     self.state = "WAIT_INSTRUCTION_TIME"
                 else:
+                    # 얼굴 미감지 시 누적 안 함
                     self.set_overlay_opacity(40)
                     if self.guide_animation.state() == QAbstractAnimation.Running:
                         self.guide_animation.stop()
                     self.guide_opacity_effect.setOpacity(1.0)
-                    self.instruction_label.setText(f"{current_instruction}\n※ 화면 중앙에 얼굴을 맞춰주세요 ※")
+                    self.instruction_label.setText(f"{current_instruction}\n※ 화면 중앙에 얼굴을 위치시켜주세요 ※")
                     self.state = "SHOW_INSTRUCTION"
             else:
+                # 샘플 확보 -> 다음 지침/단계
                 self._transition_instruction_complete()
                 return
 
@@ -271,7 +302,7 @@ class EnrollmentRecordingPage(BasePage):
             self.last_state_change_time = time.time()
 
         elif self.state == "SHOW_START_MESSAGE":
-            self.show_overlay_message(f"{self.current_step_index + 1}단계 촬영 시작!", duration_ms=2000, finished_callback=self._transition_to_instruction_state)
+            self.show_overlay_message(f"{self.current_step_index + 1}번째 촬영 시작!", duration_ms=2000, finished_callback=self._transition_to_instruction_state)
             self.last_state_change_time = time.time()
             self.state = "WAIT_OVERLAY"
 
@@ -280,19 +311,19 @@ class EnrollmentRecordingPage(BasePage):
        
         elif self.state == "SHOW_END_MESSAGE":
             self.instruction_label.setText("")
-            self.show_overlay_message(f"{self.current_step_index + 1}단계 완료!", duration_ms=2000)
+            self.show_overlay_message(f"{self.current_step_index + 1}번째 촬영 완료!", duration_ms=2000)
             QTimer.singleShot(2500, self._transition_to_next_step)
             self.state = "WAIT_OVERLAY_END"
 
         elif self.state == "WAIT_OVERLAY_END":
             pass
 
-        # 화면 그리기
+        # --------------------------
+        # QPixmap 변환
+        # --------------------------
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         qimg = QImage(rgb_frame.data, frame.shape[1], frame.shape[0], 3*frame.shape[1], QImage.Format_RGB888)
         qpixmap = QPixmap.fromImage(qimg)
-        
-        # 둥근 모서리 마스킹
         mask = QBitmap(qpixmap.size())
         mask.fill(Qt.color0)
         painter = QPainter(mask)
@@ -303,6 +334,7 @@ class EnrollmentRecordingPage(BasePage):
         qpixmap.setMask(mask)
         self.video_label.setPixmap(qpixmap)
 
+    # 현재 지침 완료 시 상태 전환
     def _transition_instruction_complete(self):
         self.progress_bars[self.current_step_index].setStyleSheet(self._get_step_style(self.current_step_index, 2))
         current_step = ENROLLMENT_STEPS[self.current_step_index]
@@ -310,12 +342,14 @@ class EnrollmentRecordingPage(BasePage):
         self.accum_samples_count_current_instruction = 0
         self.last_state_change_time = time.time()
        
+        # 다음 지침 남았는지 확인
         if self.current_instruction_index < len(current_step["instructions"]):
             self.state = "SHOW_INSTRUCTION"
         else:
-            self.state = "SHOW_END_MESSAGE"
+            self.state = "SHOW_END_MESSAGE" # 다음 단계 전환
             return
 
+    # SHOW_START_MESSAGE -> SHOW_INSTRUCTION로 상태 전환
     def _transition_to_instruction_state(self):
         try:
             if self.current_step_index < len(ENROLLMENT_STEPS) and self.accum_samples_count < self.MAX_SAMPLES:
@@ -324,10 +358,14 @@ class EnrollmentRecordingPage(BasePage):
                 self.progress_bars[self.current_step_index].setStyleSheet(self._get_step_style(self.current_step_index, 1))
                 self.instruction_label.show()
                 self.state = "SHOW_INSTRUCTION"
+                self.last_state_change_time = time.time()
             else:
                 self.state = "SHOW_END_MESSAGE"
-        except RuntimeError: pass
+                self.last_state_change_time = time.time()
+        except RuntimeError:
+            pass
 
+    # 다음 단계로 이동
     def _transition_to_next_step(self):
         try:
             if self.current_step_index < len(self.step_lines):
@@ -344,23 +382,24 @@ class EnrollmentRecordingPage(BasePage):
             else:
                 self.show_overlay_message("촬영 완료!")
                 self.timer.stop()
-                # 🚨 [수정] 등록 완료 처리
                 success = self.face_rec.finish_enrollment()
-                if success:
-                    self.switch_callback("result", self.user_data, mode="enroll")
-                else:
-                    self.switch_callback("enrollment_input") # 실패시 처음으로
-        except RuntimeError: pass
+                self.switch_callback("result", self.user_data, mode="enroll")
+        except RuntimeError:
+            pass
 
     def show_overlay_message(self, text, duration_ms=2000, finished_callback=None):
         try:
-            if self.instruction_label.parent(): self.instruction_label.hide()
-        except RuntimeError: pass
+            if self.instruction_label.parent():
+                self.instruction_label.hide()
+        except RuntimeError:
+            pass
         self.overlay_status_label.setText(text)
         try:
             effect = self.overlay_status_label.graphicsEffect()
-            if effect: effect.setOpacity(0.0)
-        except RuntimeError: pass
+            if effect:
+                effect.setOpacity(0.0)
+        except RuntimeError:
+            pass
         fade_in_out(self.overlay_status_label, visible_ms=duration_ms, finished_callback=finished_callback)
 
     def closeEvent(self, event):
