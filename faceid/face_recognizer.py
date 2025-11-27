@@ -60,9 +60,10 @@ def ensure_dir(p: str):
 class Identity:
     """개인 정보 및 얼굴 벡터 저장용 구조체"""
     name: str
-    student_id: str = "" # 학번 추가 # 백엔드 API 연동 : 기본값을 주어 에러 방지
     vecs: List[List[float]]
     template: List[float]
+    student_id: str = "" # 학번 추가 # 백엔드 API 연동 : 기본값을 주어 에러 방지
+    
 
 def load_gallery(path: str) -> Dict[str, Identity]:
     """등록된 얼굴 데이터 로드"""
