@@ -7,7 +7,7 @@ from datetime import datetime
 from database import get_db_connection
 
 # 모델 파일 경로 (main.py 옆에 있다고 가정)
-MODEL_PATH = "final_model.pkl"
+MODEL_PATH = "final_library_model.pkl"
 try:
     model = joblib.load(MODEL_PATH)
     print("✅ [Service] 예측 모델 로드 완료")
