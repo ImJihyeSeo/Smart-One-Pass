@@ -63,8 +63,11 @@ async def reserve_seat_handler(data: Dict[str, Any]):
     # 🚨 [추가] 1인 1좌석 강제 (중복 예약 방지)
     # =================================================================
     # 이 학생(sid)으로 예약된 기록을 다 가져옵니다.
+    print(f"🕵️ [검사 시작] 학번 {sid_found}의 기존 예약 기록 조회 중...")
     user_reservations = get_reservation_status(conditions={'sid': sid_found})
-    
+    # DB에서 가져온 기록을 터미널에 통째로 출력해봅니다.
+    print(f"📜 [DB 조회 결과] 가져온 기록 개수: {len(user_reservations) if user_reservations else 0}개")
+    print(f"📜 [상세 내용] {user_reservations}")
     # DB 오류 체크 (튜플로 오면 에러임)
     if isinstance(user_reservations, tuple) and not user_reservations[0]:
         raise HTTPException(status_code=500, detail="DB_ERROR_CHECKING_USER")
@@ -74,6 +77,9 @@ async def reserve_seat_handler(data: Dict[str, Any]):
     active_seat = None
     if user_reservations:
         for res in user_reservations:
+            # 반납 안 한(None) 기록 찾기
+            print(f"   -> 검사 중: 좌석 {res.get('seat_number')}번, 반납시간: {res.get('return_time')}")
+
             if res.get('return_time') is None: # 아직 반납 안 함
                 active_seat = res
                 break
@@ -87,6 +93,8 @@ async def reserve_seat_handler(data: Dict[str, Any]):
                 message=f"이미 좌석({active_seat.get('seat_number')}번)을 이용 중입니다. 반납 후 다시 시도해주세요."
             )
         )
+    else:
+        print("✅ [통과] 현재 이용 중인 좌석 없음.")
     # =================================================================
     
     # 2-C. 예약하려는 좌석의 존재 여부 확인 (SELECT)
