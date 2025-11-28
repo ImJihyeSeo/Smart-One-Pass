@@ -28,6 +28,9 @@ async def reserve_seat_handler(data: Dict[str, Any]):
     sid_found = data.get('sid')
     room_id = data.get('room_id')
     seat_number = data.get('seat_number')
+
+    # 🔍 [Debug 로그 추가] 프론트엔드가 뭘 보냈는지 확인!
+    print(f"🕵️ [Debug] 예약 요청 도착! SID: {sid_found}, Room: {room_id}, Seat: {seat_number}")
     
     if sid_found is None:
         # validate_input이 실패했을 때 400이 발생했어야 하지만, 
@@ -45,6 +48,8 @@ async def reserve_seat_handler(data: Dict[str, Any]):
 
     # 🚨 추가: sid가 DB에 존재하는지 확인 (인증이 분리되었으므로 필수)
     if not check_student_exists(sid_found): 
+        # 🚨 여기서 걸리면 학생이 없는 것
+        print(f"❌ [Debug] 학생을 찾을 수 없음: {sid_found}")
         # 🚨 수정: 오류 코드를 명확히 지정하여 반환
         raise HTTPException(
             status_code=404, 
@@ -58,6 +63,8 @@ async def reserve_seat_handler(data: Dict[str, Any]):
     result = get_seat_information(room_id, seat_number)
     
     if isinstance(result, tuple):
+        # 🚨 여기서 걸리면 좌석이 없는 것 (방 ID가 틀렸거나 번호가 틀림)
+        print(f"❌ [Debug] 좌석을 찾을 수 없음! Room: '{room_id}', Seat: '{seat_number}'")
         error_details = result[1]
         error_code = error_details.get('error_code')
         
