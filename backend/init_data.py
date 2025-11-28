@@ -38,38 +38,97 @@ def insert_initial_data():
         
         print(f"✅ 열람실 {len(rooms)}개 정보 입력 완료")
 
-        # ==========================================
-        # 2. 좌석(study_room_seat) 데이터 대량 삽입
-        # ==========================================
-        # 각 열람실별 실제 좌석 수 (프론트엔드 코드 참고함)
-        room_seats_count = {
-            "1": 375,         # 제1열람실
-            "2-1": 269,       # 제2-1열람실
-            "2-2": 134,       # 제2-2열람실
-            "2-2_grad": 62    # 대학원생실
-        }
+        # # ==========================================
+        # # 2. 좌석(study_room_seat) 데이터 대량 삽입
+        # # ==========================================
+        # # 각 열람실별 실제 좌석 수 (프론트엔드 코드 참고함)
+        # room_seats_count = {
+        #     "1": 376,         # 제1열람실
+        #     "2-1": 270,       # 제2-1열람실
+        #     "2-2": 136,       # 제2-2열람실
+        #     "2-2_grad": 62    # 대학원생실
+        # }
 
+        # sql_seat = """
+        #     INSERT INTO study_room_seat (room_id, seat_number)
+        #     VALUES (%s, %s)
+        #     ON CONFLICT (room_id, seat_number) DO NOTHING;
+        # """
+
+        # total_inserted = 0
+        
+        # # 이중 반복문으로 수백 개의 좌석 데이터를 한 번에 생성
+        # for room_id, count in room_seats_count.items():
+        #     for seat_num in range(1, count + 1):
+        #         cursor.execute(sql_seat, (room_id, seat_num))
+        #         total_inserted += 1
+        
+        # print(f"✅ 좌석 정보 총 {total_inserted}개 입력 완료")
+
+        # # ==========================================
+        # # 3. 변경 사항 저장 (Commit)
+        # # ==========================================
+        # conn.commit()
+        # print("\n🎉 모든 데이터가 성공적으로 저장되었습니다!")
+
+        # ==========================================
+        # 3. [핵심] 복잡한 좌석 번호 생성 로직
+        # ==========================================
+        
+        # 각 열람실별 좌석 리스트를 담을 딕셔너리
+        seat_map = {}
+
+        # (1) 제1열람실: 1 ~ 375 (연속)
+        seat_map["1"] = list(range(1, 377))
+
+        # (2) 제2-1열람실: 1 ~ 270 (연속)
+        seat_map["2-1"] = list(range(1, 271))
+
+        # (3) 제2-2열람실: 띄엄띄엄 구간
+        # 1~66, 79~92, 105~120, 137~176
+        seats_2_2 = []
+        seats_2_2.extend(range(1, 67))    # 1 ~ 66
+        seats_2_2.extend(range(79, 93))   # 79 ~ 92
+        seats_2_2.extend(range(105, 121)) # 105 ~ 120
+        seats_2_2.extend(range(137, 177)) # 137 ~ 176
+        seat_map["2-2"] = seats_2_2
+
+        # (4) 대학원실: 띄엄띄엄 구간 + 캐럴(1~6)
+        # 67~78, 93~104, 121~136, 177~192
+        seats_grad = []
+        
+        # 일반 좌석 구간
+        seats_grad.extend(range(67, 79))   # 67 ~ 78
+        seats_grad.extend(range(93, 105))  # 93 ~ 104
+        seats_grad.extend(range(121, 137)) # 121 ~ 136
+        seats_grad.extend(range(177, 193)) # 177 ~ 192
+        
+        # 캐럴석 (1~6번으로 저장) -> 다른 좌석 번호(67~)와 안 겹쳐서 OK!
+        seats_grad.extend([1, 2, 3, 4, 5, 6]) 
+        
+        seat_map["2-2_grad"] = seats_grad
+
+        # ==========================================
+        # 4. DB에 한 방에 넣기
+        # ==========================================
         sql_seat = """
             INSERT INTO study_room_seat (room_id, seat_number)
-            VALUES (%s, %s)
-            ON CONFLICT (room_id, seat_number) DO NOTHING;
+            VALUES (%s, %s);
         """
 
-        total_inserted = 0
-        
-        # 이중 반복문으로 수백 개의 좌석 데이터를 한 번에 생성
-        for room_id, count in room_seats_count.items():
-            for seat_num in range(1, count + 1):
+        total_count = 0
+        for room_id, seat_list in seat_map.items():
+            for seat_num in seat_list:
                 cursor.execute(sql_seat, (room_id, seat_num))
-                total_inserted += 1
+                total_count += 1
         
-        print(f"✅ 좌석 정보 총 {total_inserted}개 입력 완료")
+        print(f"✅ 좌석 정보 총 {total_count}개 입력 완료")
+        print(f"   - 제2-2열람실: {len(seats_2_2)}개")
+        print(f"   - 대학원실: {len(seats_grad)}개 (캐럴 6개 포함)")
 
-        # ==========================================
-        # 3. 변경 사항 저장 (Commit)
-        # ==========================================
+        # 커밋
         conn.commit()
-        print("\n🎉 모든 데이터가 성공적으로 저장되었습니다!")
+        print("\n🎉 복잡한 좌석 데이터가 완벽하게 저장되었습니다!")
 
     except Exception as e:
         conn.rollback() # 에러 나면 취소

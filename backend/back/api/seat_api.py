@@ -466,9 +466,9 @@ async def get_seat_stats_handler():
     
     # 초기 데이터 (총 좌석 수는 고정값이거나 study_room 테이블에서 가져와야 함)
     stats = {
-        "1": {"total": 375, "current": 0},       # 제1열람실
-        "2-1": {"total": 269, "current": 0},     # 제2-1열람실
-        "2-2": {"total": 134, "current": 0},     # 제2-2열람실
+        "1": {"total": 376, "current": 0},       # 제1열람실
+        "2-1": {"total": 270, "current": 0},     # 제2-1열람실
+        "2-2": {"total": 136, "current": 0},     # 제2-2열람실
         "2-2_grad": {"total": 62, "current": 0}  # 대학원생
     }
     
