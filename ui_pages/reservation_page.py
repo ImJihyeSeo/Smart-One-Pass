@@ -223,6 +223,16 @@ class ReservationPage(BasePage):
         main_layout.addSpacing(40)
 
         # 백엔드 API 연동
+        
+        # 👇 이 부분이 있어야 앱 켜자마자 DB 값을 가져옵니다.
+        self.fetch_room_stats()
+        
+        # 5초마다 자동 갱신
+        self.timer = QTimer(self)
+        self.timer.setInterval(5000)
+        self.timer.timeout.connect(self.fetch_room_stats)
+        self.timer.start()
+
         QTimer.singleShot(100, self.fetch_room_stats)
 
     # 기존 코드 주석 처리
@@ -300,22 +310,31 @@ class ReservationPage(BasePage):
         """ [API 연동] 열람실별 통계 조회 """
         try:
             # 방금 만든 API 호출
-            response = requests.get(f"{API_BASE_URL}/seat/stats")
+            response = requests.get(f"{API_BASE_URL}/seat/stats", timeout=3)
             
             if response.status_code == 200:
-                res_json = response.json().get("data", {})
+                # res_json = response.json().get("data", {})
 
-                # 1. 타입 확인 및 데이터 추출
-                if isinstance(res_json, dict):
-                    # 예상대로 딕셔너리인 경우 ('data' 키 확인)
-                    data = res_json.get("data", {})
-                elif isinstance(res_json, list):
-                    # 만약 리스트로 왔다면, 그대로 사용하거나 첫 번째 요소 사용 (상황에 맞게)
-                    # 여기서는 데이터가 없다고 가정하고 빈 딕셔너리 처리하여 에러 방지
-                    print("Warning: Stats API returned a list, expected dict.")
-                    data = {}
-                else:
-                    data = {}
+                # # 1. 타입 확인 및 데이터 추출
+                # if isinstance(res_json, dict):
+                #     # 예상대로 딕셔너리인 경우 ('data' 키 확인)
+                #     data = res_json.get("data", {})
+                # elif isinstance(res_json, list):
+                #     # 만약 리스트로 왔다면, 그대로 사용하거나 첫 번째 요소 사용 (상황에 맞게)
+                #     # 여기서는 데이터가 없다고 가정하고 빈 딕셔너리 처리하여 에러 방지
+                #     print("Warning: Stats API returned a list, expected dict.")
+                #     data = {}
+                # else:
+                #     data = {}
+
+                res_json = response.json()
+                
+                # 2. 데이터 추출 (리스트/딕셔너리 안전 처리)
+                if isinstance(res_json, list):
+                    res_json = res_json[0] # 리스트면 첫 번째 요소 꺼냄
+                
+                # 'data' 키에서 실제 통계 정보 가져오기
+                data = res_json.get("data", {})
 
                 # 2. 데이터가 딕셔너리가 아니면 처리 중단 (방어 코드)
                 if not isinstance(data, dict):
@@ -333,8 +352,14 @@ class ReservationPage(BasePage):
                 for room_id, info in data.items():
                     display_name = ID_TO_NAME.get(room_id)
                     if display_name and display_name in self.room_widgets:
-                        # 위젯 업데이트
-                        self.room_widgets[display_name].update_status(info['current'], info['total'])
+                        current = info.get('current', 0)
+                        total = info.get('total', 0)
+                        
+                        # 카드 위젯의 update_status 메서드 호출
+                        self.room_widgets[display_name].update_status(current, total)
+
+                        # # 위젯 업데이트
+                        # self.room_widgets[display_name].update_status(info['current'], info['total'])
                         
         except Exception as e:
             print(f"Stats API Error: {e}")
@@ -369,17 +394,29 @@ class ReservationPage(BasePage):
         status_grid.setColumnStretch(1, 1)
 
         room_data = [
-            ("제1열람실", 8, 375, "제1열람실"),
-            ("제2-1열람실", 55, 270, "제2-1열람실"),
-            ("제2-2열람실", 102, 136, "제2-2열람실"),
-            ("제2-2열람실\n(대학원생 전용)", 15, 62, "제2-2열람실\n(대학원생 전용)"),
+            ("제1열람실", 1, 375, "제1열람실"),
+            ("제2-1열람실", 2, 269, "제2-1열람실"),
+            ("제2-2열람실", 3, 134, "제2-2열람실"),
+            ("제2-2열람실\n(대학원생 전용)", 4, 62, "제2-2열람실\n(대학원생 전용)"),
         ]
-        
+        # 🚨 [수정 2] 나중에 업데이트하기 위해 위젯을 저장할 딕셔너리 초기화
+        self.room_widgets = {}
+
         for i, (name, current, total, key) in enumerate(room_data):
             row = i // 2
             col = i % 2
-            status_card = self._create_status_card(name, current, total, lambda checked, k=key: self._go_to_seat_map(k))
+            status_card = self._create_status_card(
+                name, current, total, 
+                lambda checked, k=key: self._go_to_seat_map(k)
+            )
+            # 🚨 [수정 3] 생성된 카드를 딕셔너리에 저장! (나중에 fetch_room_stats가 이걸 씀)
+            # 줄바꿈 문자(\n)가 있으면 매칭이 안 될 수 있으니 주의해야 하지만,
+            # 여기서는 name 그대로 키로 씁니다. (fetch_room_stats의 ID_TO_NAME과 일치해야 함)
+            self.room_widgets[name] = status_card
+
             status_grid.addWidget(status_card, row, col, alignment=Qt.AlignCenter) 
+
+
 
         # 테두리
         outer_frame = QFrame()
