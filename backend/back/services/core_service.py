@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 import numpy as np # 🚨 추가 필요 (pip install numpy)
 
 load_dotenv()
+# ✅ [추가] 전역 KST 상수 정의
+KST = timezone(timedelta(hours=9))
 
 # 🚨 import 경로는 당신의 실제 프로젝트 구조에 맞게 수정하세요.
 from database import get_db_connection 
@@ -450,7 +452,7 @@ def process_access_record(
     cursor = conn.cursor()
     ERROR_DB = {"error_code": "DB_ERROR", "message": "출입 기록 저장 중 데이터베이스 오류가 발생했습니다."}
     # UTC 사용 (권장)
-    current_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S') 
+    current_time = datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S') 
     try:
         if action_type == "IN":
             # [Case 1] 입장 처리: 새로운 기록을 INSERT 합니다.
@@ -1078,7 +1080,7 @@ def check_extension_validity(
     try:
         # 현재 UTC 시간을 기준으로 비교합니다.
         # DB 저장 시 타임존이 없어도 UTC임을 가정하고 처리합니다.
-        now_utc = datetime.now(timezone.utc) 
+        now_kst = datetime.now(KST) 
 
 
         FULL_FORMAT = '%Y-%m-%d %H:%M:%S'
@@ -1089,20 +1091,20 @@ def check_extension_validity(
         end_val = reservation_info['end_time']
         
         if isinstance(start_val, str):
-            start_dt = datetime.strptime(start_val, FULL_FORMAT).replace(tzinfo=timezone.utc)
+            start_dt = datetime.strptime(start_val, FULL_FORMAT).replace(tzinfo=KST)
         else:
             # PostgreSQL TIMESTAMP는 파이썬 datetime으로 자동 변환될 수 있음
-            start_dt = start_val.replace(tzinfo=timezone.utc) if start_val.tzinfo is None else start_val
+            start_dt = start_val.replace(tzinfo=KST) if start_val.tzinfo is None else start_val
 
         if isinstance(end_val, str):
-            end_dt = datetime.strptime(end_val, FULL_FORMAT).replace(tzinfo=timezone.utc)
+            end_dt = datetime.strptime(end_val, FULL_FORMAT).replace(tzinfo=KST)
         else:
-            end_dt = end_val.replace(tzinfo=timezone.utc) if end_val.tzinfo is None else end_val
+            end_dt = end_val.replace(tzinfo=KST) if end_val.tzinfo is None else end_val
         
         # ----------------------------------------------------------------------
         # A. 예약이 이미 끝났는지 확인 (end_time이 현재 시간보다 빠른지)
         # ----------------------------------------------------------------------
-        if end_dt <= now_utc:
+        if end_dt <= now_kst:
             return False, {
                 "error_code": "RESERVATION_ENDED", 
                 "message": "예약 시간이 이미 종료되었습니다."
@@ -1111,7 +1113,7 @@ def check_extension_validity(
         # ----------------------------------------------------------------------
         # B. 사용한 지 2시간이 지났는지 확인 (start_time과 현재 시간 비교)
         # ----------------------------------------------------------------------
-        elapsed_time = now_utc - start_dt
+        elapsed_time = now_kst - start_dt
         if elapsed_time < MIN_ELAPSED_TIME:
             min_minutes = int(MIN_ELAPSED_TIME.total_seconds() / 60)
             return False, {
@@ -1193,9 +1195,9 @@ def execute_extend_reservation(
         
         # 타입 체크 및 변환
         if isinstance(end_val, str):
-            current_end_dt = datetime.strptime(end_val, FULL_FORMAT).replace(tzinfo=timezone.utc)
+            current_end_dt = datetime.strptime(end_val, FULL_FORMAT).replace(tzinfo=KST)
         else:
-            current_end_dt = end_val.replace(tzinfo=timezone.utc) if end_val.tzinfo is None else end_val
+            current_end_dt = end_val.replace(tzinfo=KST) if end_val.tzinfo is None else end_val
             
         # 새로운 종료 시간 (3시간 추가)
         new_end_dt = current_end_dt + EXTENSION_DURATION
@@ -1264,7 +1266,7 @@ def execute_reservation_return(
     # 1. 사용할 테이블과 상태 상수 결정
     table_name = 'seat_reservation'
     # 🚨 CRITICAL FIX: 문자열 대신 Python datetime 객체 그대로 사용 (PostgreSQL 권장)
-    status_value = datetime.now(timezone.utc)
+    status_value = datetime.now(KST)
 
     try:
         # --- 2. UPDATE 쿼리 실행 (return_status 컬럼 업데이트) ---

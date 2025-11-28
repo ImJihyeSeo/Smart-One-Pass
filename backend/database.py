@@ -27,6 +27,10 @@ def get_db_connection():
         # conn.row_factory = extras.RealDictCursor 를 사용하려면 cursor를 만들 때 지정합니다.
 
         conn.cursor_factory = psycopg2.extras.RealDictCursor
+
+        cursor = conn.cursor()
+        cursor.execute("SET timezone = 'Asia/Seoul';")
+        cursor.close()
         
         return conn
     except Exception as e:
