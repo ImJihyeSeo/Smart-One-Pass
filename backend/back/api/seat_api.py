@@ -93,16 +93,16 @@ async def reserve_seat_handler(data: Dict[str, Any]):
     # end_time_str = end_time_dt.strftime('%H:%M:%S')
 
     # 4. 운영 시간 및 예약 가능 시간 검증 (check_time)
-    operating_hours = get_room_operating_hours(room_id) # core_service에서 운영 시간을 가져와야 함
+    # operating_hours = get_room_operating_hours(room_id) # core_service에서 운영 시간을 가져와야 함
 
-    if operating_hours is None:
-        raise HTTPException(status_code=404, detail="ROOM_NOT_FOUND")
+    # if operating_hours is None:
+    #     raise HTTPException(status_code=404, detail="ROOM_NOT_FOUND")
     
-    success, error_details = check_time(start_time_str, end_time_str, operating_hours)
+    # success, error_details = check_time(start_time_str, end_time_str, operating_hours)
 
-    if not success:
-        # 🚨 check_time 내부에서 WRONG_TIME 또는 OPERATING_HOURS_VIOLATION 오류 처리
-        raise HTTPException(status_code=409, detail=error_details.get('error_code'))
+    # if not success:
+    #     # 🚨 check_time 내부에서 WRONG_TIME 또는 OPERATING_HOURS_VIOLATION 오류 처리
+    #     raise HTTPException(status_code=409, detail=error_details.get('error_code'))
         
     # 5. 시간 충돌 검사 (check_time_overlap)
     # 예약이 겹치는지 DB를 확인 (SELECT)
@@ -112,15 +112,49 @@ async def reserve_seat_handler(data: Dict[str, Any]):
 
     # 5. 시간 충돌 검사 (check_time_overlap)
     # 🚨 CRITICAL FIX: check_time_overlap의 매개변수를 DB에 맞게 전달
-    if check_time_overlap(
-        start_time_str,      # 🚨 시작 시간 (TIME)
-        end_time_str,        # 🚨 종료 시간 (TIME)
-        reservation_date,    # 🚨 날짜 (DATE)
-        room_id,             # room_id
-        seat_number,         # seat_number
-    ):
-        raise HTTPException(status_code=409, detail="ALREADY_RESERVED_OVERLAP")
+    # if check_time_overlap(
+    #     start_time_str,      # 🚨 시작 시간 (TIME)
+    #     end_time_str,        # 🚨 종료 시간 (TIME)
+    #     reservation_date,    # 🚨 날짜 (DATE)
+    #     room_id,             # room_id
+    #     seat_number,         # seat_number
+    # ):
+    #     raise HTTPException(status_code=409, detail="ALREADY_RESERVED_OVERLAP")
         
+    
+    # 5. 운영 시간 및 예약 가능 시간 검증 (check_time)
+    operating_hours = get_room_operating_hours(room_id)
+    
+    if operating_hours is None:
+        print(f"❌ [Debug] 운영 시간 정보 없음 (Room ID: {room_id})")
+        raise HTTPException(status_code=404, detail="ROOM_NOT_FOUND")
+    
+    # 디버깅 로그 추가
+    print(f"🕒 [Debug] 운영 시간: {operating_hours}")
+    print(f"🕒 [Debug] 예약 요청 시간: {start_time_str} ~ {end_time_str}")
+
+    success, error_details = check_time(now_kst.strftime('%H:%M:%S'), end_time_dt.strftime('%H:%M:%S'), operating_hours)
+
+    if not success:
+        # 🚨 범인 1호: 운영 시간 위반
+        error_code = error_details.get('error_code')
+        print(f"❌ [Debug] 시간 검증 실패: {error_code}")
+        raise HTTPException(status_code=409, detail=error_code)
+        
+    # 6. 시간 충돌 검사 (check_time_overlap)
+    is_overlap = check_time_overlap(
+        start_time_str,
+        end_time_str,
+        reservation_date,
+        room_id,
+        seat_number,
+    )
+    
+    if is_overlap:
+        # 🚨 범인 2호: 중복 예약 (테이블이 비었는데 이게 뜨면 로직 오류)
+        print(f"❌ [Debug] 중복 예약 감지됨 (Overlap)")
+        raise HTTPException(status_code=409, detail="ALREADY_RESERVED_OVERLAP")
+    
     # 6. 최종 예약 생성 (INSERT)
     reservation_data = {
         'sid': sid_found,
