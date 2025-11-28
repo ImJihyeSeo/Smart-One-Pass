@@ -528,10 +528,54 @@ class ReservationPage(BasePage):
         dialog = CustomAlertDialog(info_message, self, buttons=dialog_buttons, width=dialog_width) 
         dialog.exec()
 
+    # def _go_to_return_page(self):
+    #     self.switch_callback("return_seat")
+
     def _go_to_return_page(self):
+        """ 좌석 반납 페이지로 이동하기 전, 예약 여부 먼저 확인 """
+        
+        # 1. 현재 내 예약 정보 가져오기 (이미 만들어둔 함수 재활용)
+        current_reservation = self._get_user_reservation_data()
+
+        # 2. 예약이 없다면? -> 알림만 띄우고 함수 종료 (페이지 이동 X)
+        if not current_reservation:
+            message = {
+                "title": "알림",
+                "body": "반납할 좌석이 없습니다.",
+                "footer": "예약 후 이용해 주세요."
+            }
+            # 확인 버튼 누르면 그냥 팝업만 닫힘
+            buttons = [{'text': '확인', 'style': 'confirm', 'callback': None}]
+            
+            CustomAlertDialog(message, self, buttons=buttons).exec()
+            return  # 🚫 여기서 함수를 끝내서 페이지 이동을 막습니다.
+
+        # 3. 예약이 있다면? -> 반납 페이지로 이동
         self.switch_callback("return_seat")
 
+    # def _go_to_extend_page(self):
+    #     self.switch_callback("extend_seat")
+
     def _go_to_extend_page(self):
+        """ 좌석 연장 페이지로 이동하기 전, 예약 여부 먼저 확인 """
+        
+        # 1. 현재 내 예약 정보 가져오기 (API 확인)
+        current_reservation = self._get_user_reservation_data()
+
+        # 2. 예약이 없다면? -> 알림만 띄우고 함수 종료 (페이지 이동 안 함)
+        if not current_reservation:
+            message = {
+                "title": "알림",
+                "body": "현재 이용 중인 좌석이 없습니다.",
+                "footer": "좌석 배정 후 이용해 주세요."
+            }
+            # 확인 버튼 설정 (누르면 팝업만 닫힘)
+            buttons = [{'text': '확인', 'style': 'confirm', 'callback': None}]
+            
+            CustomAlertDialog(message, self, buttons=buttons).exec()
+            return  # 🚫 여기서 함수를 끝내서 페이지 이동을 원천 봉쇄합니다.
+
+        # 3. 예약이 있다면? -> 연장 페이지로 이동
         self.switch_callback("extend_seat")
 
     def _go_to_seat_map(self, room_name):
