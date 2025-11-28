@@ -959,7 +959,7 @@ def get_reservation_status(
     # where_clauses.append("end_time > CURRENT_TIME") # 예약이 아직 끝나지 않았는지 확인 (당일 한정 문제)
 
     # where_clauses.append("end_time > CURRENT_TIME AND date = CURRENT_DATE")
-    where_clauses.append("date + start_time <= NOW()") # 예약 시작 시간이 현재 시간보다 빠르거나 같고
+    # where_clauses.append("date + start_time <= NOW()") # 예약 시작 시간이 현재 시간보다 빠르거나 같고
     # where_clauses.append("date + end_time > NOW()")   # 예약 종료 시간이 현재 시간보다 늦고
     where_clauses.append("return_time IS NULL")
     
