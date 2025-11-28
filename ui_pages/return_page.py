@@ -187,7 +187,8 @@ class ReturnSeatPage(BasePage):
         # 레이아웃 배치
         card_h_layout.addWidget(key_container)
         card_h_layout.addWidget(line_frame)
-        card_h_layout.addLayout(value_layout)
+        # card_h_layout.addLayout(value_layout)
+        card_h_layout.addWidget(value_container)  # 수정됨 (위젯을 추가)
 
         # 반납 버튼
         return_btn = QPushButton("반납")
@@ -226,30 +227,65 @@ class ReturnSeatPage(BasePage):
         BLUE = "#2e6cff"
         WHITE = "#ffffff"
         
-        # 1. 좌석
-        self.value_labels["seat_info"].setText(
-            f'제{self.seat_data["seat_room"]}열람실 {self.seat_data["seat_number"]}번'
-        )
+        # # 1. 좌석
+        # self.value_labels["seat_info"].setText(
+        #     f'제{self.seat_data["seat_room"]}열람실 {self.seat_data["seat_number"]}번'
+        # )
         
-        # 2. 배정 일시
-        self.value_labels["time_info"].setText(
-            f'오후 {self.seat_data["assigned_time_start"]} ~ 오후 {self.seat_data["assigned_time_end"]}'
-        )
+        # # 2. 배정 일시
+        # self.value_labels["time_info"].setText(
+        #     f'오후 {self.seat_data["assigned_time_start"]} ~ 오후 {self.seat_data["assigned_time_end"]}'
+        # )
         
-        # 3. 잔여 시간 (HTML)
-        remain_html = (
-            f'<span style="font-size:28px;">'
-            f'<span style="color:{BLUE}; font-weight:bold;">{self.seat_data["remaining_time_min"]}</span>'
-            f'<span style="color:{WHITE};"> / {self.seat_data["total_time_min"]}</span>'
-            f'<span style="color:{WHITE};"> (분)</span>'
-            f'</span>'
-        )
-        self.value_labels["remain_info"].setText(remain_html)
+        # # 3. 잔여 시간 (HTML)
+        # remain_html = (
+        #     f'<span style="font-size:28px;">'
+        #     f'<span style="color:{BLUE}; font-weight:bold;">{self.seat_data["remaining_time_min"]}</span>'
+        #     f'<span style="color:{WHITE};"> / {self.seat_data["total_time_min"]}</span>'
+        #     f'<span style="color:{WHITE};"> (분)</span>'
+        #     f'</span>'
+        # )
+        # self.value_labels["remain_info"].setText(remain_html)
         
-        # 4. 연장 가능 시간
-        self.value_labels["extend_info"].setText(
-            f'오후 {self.seat_data["extend_time"]}'
-        )
+        # # 4. 연장 가능 시간
+        # self.value_labels["extend_info"].setText(
+        #     f'오후 {self.seat_data["extend_time"]}'
+        # )
+
+        # ✅ 안전장치 추가
+        try:
+            # 1. 좌석
+            if "seat_info" in self.value_labels:
+                self.value_labels["seat_info"].setText(
+                    f'제{self.seat_data["seat_room"]}열람실 {self.seat_data["seat_number"]}번'
+                )
+            
+            # 2. 배정 일시
+            if "time_info" in self.value_labels:
+                self.value_labels["time_info"].setText(
+                    f'오후 {self.seat_data["assigned_time_start"]} ~ 오후 {self.seat_data["assigned_time_end"]}'
+                )
+            
+            # 3. 잔여 시간 (HTML)
+            if "remain_info" in self.value_labels:
+                remain_html = (
+                    f'<span style="font-size:28px;">'
+                    f'<span style="color:{BLUE}; font-weight:bold;">{self.seat_data["remaining_time_min"]}</span>'
+                    f'<span style="color:{WHITE};"> / {self.seat_data["total_time_min"]}</span>'
+                    f'<span style="color:{WHITE};"> (분)</span>'
+                    f'</span>'
+                )
+                self.value_labels["remain_info"].setText(remain_html)
+            
+            # 4. 연장 가능 시간
+            if "extend_info" in self.value_labels:
+                self.value_labels["extend_info"].setText(
+                    f'오후 {self.seat_data["extend_time"]}'
+                )
+        except RuntimeError:
+            print("Warning: 페이지가 닫혀 UI를 업데이트할 수 없습니다.")
+        except Exception as e:
+            print(f"UI Update Error: {e}")
 
     def fetch_seat_info(self):
         """ [API 연동] 현재 좌석 정보 조회 """
@@ -276,21 +312,51 @@ class ReturnSeatPage(BasePage):
                 ROOM_MAP = {"1": "1", "2-1": "2-1", "2-2": "2-2", "2-2_grad": "2-2(대학원)"}
                 room_name = ROOM_MAP.get(reservation['room_id'], reservation['room_id'])
                 
+                
+                # ✅ 변수 미리 초기화 (에러 방지)
+                total_min = 0
+                remain_min = 0
+                extend_time_str = "-"
+                display_start = "-"
+                display_end = "-"
+                
                 # 시간 계산
                 # 1. 현재 시간 가져오기
-                now = datetime.now()
-                time_fmt = "%H:%M:%S" # DB 시간 형식
+                # now = datetime.now()
+                # time_fmt = "%Y-%m-%d %H:%M:%S" # DB 시간 형식
 
                 try:
                     # 2. DB 문자열을 시간 객체로 변환
                     # (reservation['start_time']은 "14:00:00" 같은 문자열임)
-                    s_time_obj = datetime.strptime(reservation['start_time'], time_fmt).time()
-                    e_time_obj = datetime.strptime(reservation['end_time'], time_fmt).time()
+                    # s_time_obj = datetime.strptime(reservation['start_time'], time_fmt).time()
+                    # e_time_obj = datetime.strptime(reservation['end_time'], time_fmt).time()
+
+                    now = datetime.now()
+                    raw_start = reservation['start_time']
+                    raw_end = reservation['end_time']
+                    
+                    # ✅ [수정 핵심] 포맷 확인 (날짜 포함 여부)
+                    full_fmt = "%Y-%m-%d %H:%M:%S"
+
+                    # 문자열 -> datetime 객체 변환
+                    # (혹시 모를 마이크로초 .123456 제거를 위해 문자열 슬라이싱 [:19] 사용 가능)
+                    raw_start = str(reservation['start_time'])
+                    raw_end = str(reservation['end_time'])
+
+                    # 19자리(YYYY-MM-DD HH:MM:SS)까지만 잘라서 파싱 (안전장치)
+                    if len(raw_start) > 19: raw_start = raw_start[:19]
+                    if len(raw_end) > 19: raw_end = raw_end[:19]
+
+                    start_dt = datetime.strptime(raw_start, full_fmt)
+                    end_dt = datetime.strptime(raw_end, full_fmt)
+
+                    # start_dt = datetime.strptime(reservation['start_time'], time_fmt)
+                    # end_dt = datetime.strptime(reservation['end_time'], time_fmt)
 
                     # 3. 오늘 날짜와 합쳐서 온전한 datetime 객체 생성
                     # (시간끼리만 빼면 날짜 계산이 안 되므로 오늘 날짜를 붙여줌)
-                    start_dt = datetime.combine(now.date(), s_time_obj)
-                    end_dt = datetime.combine(now.date(), e_time_obj)
+                    # start_dt = datetime.combine(now.date(), s_time_obj)
+                    # end_dt = datetime.combine(now.date(), e_time_obj)
 
                     # 4. 총 이용 시간 계산 (종료 - 시작)
                     total_delta = end_dt - start_dt
@@ -308,6 +374,10 @@ class ReturnSeatPage(BasePage):
                     extend_possible_dt = end_dt - timedelta(hours=1)
                     extend_time_str = extend_possible_dt.strftime("%H:%M")
 
+                    # ✅ [수정 3] 화면 표시용 시간 문자열 생성 (HH:MM 형태)
+                    display_start = start_dt.strftime("%H:%M")
+                    display_end = end_dt.strftime("%H:%M")
+
                 except Exception as e:
                     print(f"Time Calculation Error: {e}")
                     # 에러 발생 시 기본값 설정
@@ -317,8 +387,13 @@ class ReturnSeatPage(BasePage):
 
                 self.seat_data["seat_room"] = room_name
                 self.seat_data["seat_number"] = str(reservation['seat_number'])
-                self.seat_data["assigned_time_start"] = str(reservation['start_time'])[:5]
-                self.seat_data["assigned_time_end"] = str(reservation['end_time'])[:5]
+
+                # ✅ [수정 4] 위에서 만든 예쁜 시간 문자열 넣기
+                self.seat_data["assigned_time_start"] = display_start
+                self.seat_data["assigned_time_end"] = display_end
+
+                # self.seat_data["assigned_time_start"] = str(reservation['start_time'])[:5]
+                # self.seat_data["assigned_time_end"] = str(reservation['end_time'])[:5]
                 
                 # 잔여 시간 등은 현재 시간 기준으로 계산 필요 (여기서는 임시 값)
                 self.seat_data["remaining_time_min"] = remain_min # 예시
