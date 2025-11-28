@@ -58,6 +58,36 @@ async def reserve_seat_handler(data: Dict[str, Any]):
                 message=f"학번 {sid_found}는 등록되지 않은 회원입니다."
             )
         )
+
+    # =================================================================
+    # 🚨 [추가] 1인 1좌석 강제 (중복 예약 방지)
+    # =================================================================
+    # 이 학생(sid)으로 예약된 기록을 다 가져옵니다.
+    user_reservations = get_reservation_status(conditions={'sid': sid_found})
+    
+    # DB 오류 체크 (튜플로 오면 에러임)
+    if isinstance(user_reservations, tuple) and not user_reservations[0]:
+        raise HTTPException(status_code=500, detail="DB_ERROR_CHECKING_USER")
+
+    # 가져온 기록 중에 "반납 안 한(return_time is None)" 기록이 하나라도 있으면 예약 불가!
+    # (get_reservation_status가 과거 기록까지 다 가져올 수도 있으므로 안전하게 필터링)
+    active_seat = None
+    if user_reservations:
+        for res in user_reservations:
+            if res.get('return_time') is None: # 아직 반납 안 함
+                active_seat = res
+                break
+    
+    if active_seat:
+        raise HTTPException(
+            status_code=409, # Conflict
+            detail=error_response(
+                error_code="ALREADY_HAS_SEAT",
+                message=f"이미 좌석({active_seat.get('seat_number')}번)을 이용 중입니다. 반납 후 다시 시도해주세요."
+            )
+        )
+    # =================================================================
+    
     # 2-C. 예약하려는 좌석의 존재 여부 확인 (SELECT)
 # 2-C. 예약하려는 좌석의 존재 여부 확인 (SELECT)
     result = get_seat_information(room_id, seat_number)
