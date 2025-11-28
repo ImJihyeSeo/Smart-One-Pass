@@ -83,12 +83,14 @@ async def reserve_seat_handler(data: Dict[str, Any]):
     
     FULL_FORMAT = '%Y-%m-%d %H:%M:%S'
     start_time_str = now_kst.strftime(FULL_FORMAT)
+
+    end_time_dt = now_kst + timedelta(hours=3)
+
     end_time_str = end_time_dt.strftime(FULL_FORMAT)
 
     # 3시간 후 계산 (날짜가 바뀌는 경우는 일단 무시)
-    end_time_dt = now_kst + timedelta(hours=3)
     # end_time_str = end_time_dt.strftime('%H:%M:%S')
-    end_time_str = end_time_dt.strftime('%H:%M:%S')
+    # end_time_str = end_time_dt.strftime('%H:%M:%S')
 
     # 4. 운영 시간 및 예약 가능 시간 검증 (check_time)
     operating_hours = get_room_operating_hours(room_id) # core_service에서 운영 시간을 가져와야 함
