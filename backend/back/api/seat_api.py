@@ -79,6 +79,7 @@ async def reserve_seat_handler(data: Dict[str, Any]):
                 break
     
     if active_seat:
+        print(f"❌ [Debug] 중복 예약 차단: {sid_found}는 이미 {active_seat.get('seat_number')}번 사용 중")
         raise HTTPException(
             status_code=409, # Conflict
             detail=error_response(
