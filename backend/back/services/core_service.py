@@ -599,10 +599,15 @@ def check_time(
     #     return False, ERROR_WRONG_TIME
 
     # 4. [규칙 B] 예약 시간이 운영 시간 안에 있는지 확인
-    if start_dt < open_time & start_dt > close_time:
+    if start_dt < open_time or start_dt > close_time:
         ERROR_WRONG_TIME["message"] = f"운영 시간({open_time.strftime(time_format)}~{close_time.strftime(time_format)}) 외의 시간입니다."
         return False, ERROR_WRONG_TIME
         
+    # [수정 후 (올바른 코드)]
+    # & 대신 or를 사용해야 합니다. ("문 여는 시간 전이거나, 문 닫는 시간 후라면")
+    # if start_dt < open_time or start_dt > close_time:
+    #     return False, {"error_code": "OPERATING_HOURS_VIOLATION", "message": "지금은 운영 시간이 아닙니다."}
+    
     # 5. [규칙 C] 최소/최대 예약 시간 (예: 최소 30분, 최대 4시간) 확인
     
     # # 임시 날짜 객체 생성 (시간 차이 계산 용도)
