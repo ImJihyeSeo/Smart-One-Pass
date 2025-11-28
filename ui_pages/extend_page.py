@@ -3,7 +3,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from .base_page import BasePage
-from ui_style import BUTTON_STYLE, CANCEL_BUTTON_STYLE, TITLE_STYLE
+# from ui_style import BUTTON_STYLE, CANCEL_BUTTON_STYLE, TITLE_STYLE
+from ui_style import BUTTON_STYLE, CANCEL_BUTTON_STYLE, TITLE_STYLE, CustomAlertDialog
 
 # 백엔드 API 연동
 import sys
@@ -417,12 +418,31 @@ class ExtendSeatPage(BasePage):
             
             elif response.status_code == 409:
                 # 실패 (정책 위반: 시간 부족, 최대 시간 초과 등)
+                # ✅ [수정 2] 실패 시 예쁜 알림창 띄우고, 확인 누르면 'reservation' 페이지로 이동
                 error_msg = response.json().get("detail", {}).get("message", "연장할 수 없습니다.")
-                QMessageBox.warning(self, "연장 실패", error_msg)
+
+                # QMessageBox.warning(self, "연장 실패", error_msg)
+                message = {
+                    "title": "연장 실패",
+                    "body": error_msg, # "예약 후 최소 120분을..."
+                    "footer": ""
+                }
+                buttons = [
+                    {
+                        'text': '확인', 
+                        'style': 'confirm', 
+                        # 🚨 여기서 메인 화면("reservation")으로 이동시킵니다.
+                        'callback': lambda: self.switch_callback("reservation") 
+                    }
+                ]
+                CustomAlertDialog(message, self, buttons=buttons).exec()
             
             else:
+                # # 기타 서버 에러
+                # QMessageBox.critical(self, "오류", f"연장 요청 실패 (Code: {response.status_code})")
                 # 기타 서버 에러
-                QMessageBox.critical(self, "오류", f"연장 요청 실패 (Code: {response.status_code})")
+                CustomAlertDialog({"title":"오류", "body":f"연장 요청 실패 (Code: {response.status_code})"}, self).exec()
 
         except Exception as e:
-            QMessageBox.critical(self, "오류", f"서버 통신 오류: {e}")
+            # QMessageBox.critical(self, "오류", f"서버 통신 오류: {e}")
+            CustomAlertDialog({"title":"오류", "body":f"서버 통신 오류: {e}"}, self).exec()
