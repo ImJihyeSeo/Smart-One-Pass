@@ -1294,3 +1294,52 @@ def execute_reservation_return(
         
     finally:
         conn.close()
+
+        # services/core_service.py
+
+# ... (기존 코드들)
+
+def execute_auto_return():
+    """
+    [스케줄러용] 현재 시간보다 end_time이 지난 예약들을 찾아 자동으로 '반납' 처리합니다.
+    """
+    print("⏰ [Auto Return] 자동 반납 검사 시작...")
+    
+    conn = get_db_connection()
+    if conn is None:
+        print("❌ [Auto Return] DB 연결 실패")
+        return
+
+    cursor = conn.cursor()
+    
+    try:
+        # 현재 시간 (KST)
+        now_kst = datetime.now(KST)
+        current_time_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
+
+        # 🚨 로직: 
+        # 1. 반납 안 된 상태 (return_time IS NULL)
+        # 2. 종료 시간이 현재 시간보다 과거인 경우 (end_time < NOW)
+        # -> return_time을 현재 시간으로 업데이트 (강제 반납)
+        
+        sql = """
+            UPDATE seat_reservation
+            SET return_time = %s
+            WHERE return_time IS NULL AND end_time < %s
+        """
+        
+        cursor.execute(sql, (current_time_str, current_time_str))
+        count = cursor.rowcount # 몇 개나 반납시켰는지 확인
+        
+        if count > 0:
+            conn.commit()
+            print(f"✅ [Auto Return] 시간이 만료된 좌석 {count}개를 강제 반납 처리했습니다.")
+        else:
+            # 변경 사항 없으면 커밋 불필요 (하지만 안전하게 롤백/닫기)
+            print("💤 [Auto Return] 만료된 좌석이 없습니다.")
+            
+    except Exception as e:
+        print(f"❌ [Auto Return] 오류 발생: {e}")
+        conn.rollback()
+    finally:
+        conn.close()

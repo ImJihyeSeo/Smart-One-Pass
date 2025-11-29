@@ -7,6 +7,7 @@ numpy
 scikit-learn
 pandas
 joblib
+apscheduler
 
 # pip install -r requirements.txt
 # 을 통해서 설치할 것

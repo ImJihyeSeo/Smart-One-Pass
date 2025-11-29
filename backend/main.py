@@ -7,6 +7,11 @@ import pandas as pd
 import os
 
 
+from apscheduler.schedulers.background import BackgroundScheduler # 👈 추가
+from back.services.core_service import execute_auto_return
+from back.api import seat_api
+
+
 # 1. 현재 파일(main.py)이 있는 폴더 경로를 찾습니다.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -39,6 +44,14 @@ async def lifespan_handler(app: FastAPI):
     print("INFO: [STARTUP] 데이터베이스 초기화(스키마 검증) 시작...")
     initialize_db() # 💡 DB 초기화 함수 호출
     print("INFO: [STARTUP] 데이터베이스 초기화 완료.")
+
+    
+    # 스케줄러 생성 및 작업 추가
+    scheduler = BackgroundScheduler()
+
+    # 'execute_auto_return' 함수를 1분(minutes=1)마다 실행
+    scheduler.add_job(execute_auto_return, 'interval', minutes=1)
+    scheduler.start()
     
     # yield: 이 시점에서 서버가 외부 요청을 받기 시작합니다.
     yield 
@@ -46,7 +59,7 @@ async def lifespan_handler(app: FastAPI):
     # [SHUTDOWN 로직: 서버 종료 시]
     print("INFO: [SHUTDOWN] 애플리케이션 종료 작업 실행...")
     # (여기에 DB 연결 풀 해제 등 종료 시 필요한 코드를 넣을 수 있습니다.)
-
+    scheduler.shutdown()
 
 # 2. FastAPI 인스턴스 생성 및 lifespan 연결
 app = FastAPI(
