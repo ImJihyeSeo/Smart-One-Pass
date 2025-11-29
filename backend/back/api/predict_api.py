@@ -5,7 +5,7 @@ from typing import Dict, List
 from datetime import datetime
 from ..services.predict_service import predict_library_seats
 
-router = APIRouter(prefix="/predict", tags=["prediction"])
+router = APIRouter()
 
 @router.post("/results", response_model=Dict[str, List[Dict[str, str]]])
 async def get_prediction(payload: Dict = Body(...)):
