@@ -256,9 +256,13 @@ class ExtendSeatPage(BasePage):
                 )
             # 2. 배정 일시
             if "time_info" in self.value_labels:
-                self.value_labels["time_info"]["label"].setText(
-                    f'오후 {self.seat_data["assigned_time_start"]} ~ 오후 {self.seat_data["assigned_time_end"]}'
-                )
+                start_str = self._format_time_str(self.seat_data["assigned_time_start"])
+                end_str = self._format_time_str(self.seat_data["assigned_time_end"])
+                self.value_labels["time_info"]["label"].setText(f'{start_str} ~ {end_str}')
+
+                # self.value_labels["time_info"]["label"].setText(
+                #     f'오후 {self.seat_data["assigned_time_start"]} ~ 오후 {self.seat_data["assigned_time_end"]}'
+                # )
             # 3. 연장 시간
             if "extend_time" in self.value_labels:
                 self.value_labels["extend_time"]["label"].setText(
@@ -266,9 +270,13 @@ class ExtendSeatPage(BasePage):
                 )
             # 4. 예상 종료 시간
             if "end_time" in self.value_labels:
-                self.value_labels["end_time"]["label"].setText(
-                    f'오후 {self.seat_data["new_end_time"]}'
-                )
+
+                end_time_str = self._format_time_str(self.seat_data["new_end_time"])
+                self.value_labels["end_time"]["label"].setText(f'{end_time_str}')
+
+                # self.value_labels["end_time"]["label"].setText(
+                #     f'오후 {self.seat_data["new_end_time"]}'
+                # )
         except RuntimeError:
             print("Warning: UI 업데이트 중 위젯이 삭제됨")
         except Exception as e:
@@ -446,3 +454,23 @@ class ExtendSeatPage(BasePage):
         except Exception as e:
             # QMessageBox.critical(self, "오류", f"서버 통신 오류: {e}")
             CustomAlertDialog({"title":"오류", "body":f"서버 통신 오류: {e}"}, self).exec()
+
+        
+    def _format_time_str(self, time_str):
+        """ 'HH:MM' 문자열을 받아 '오전/오후 H:MM' 형태로 변환 """
+        if not time_str or time_str == "-":
+            return "-"
+        try:
+            # "14:00" -> 14, 0
+            hour, minute = map(int, time_str.split(':'))
+            
+            ampm = "오후" if hour >= 12 else "오전"
+            
+            # 12시간제로 변환 (13->1, 0->12)
+            display_hour = hour % 12
+            if display_hour == 0: 
+                display_hour = 12
+            
+            return f"{ampm} {display_hour}:{minute:02d}"
+        except Exception:
+            return time_str # 변환 실패 시 원본 반환

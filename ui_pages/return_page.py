@@ -262,9 +262,14 @@ class ReturnSeatPage(BasePage):
             
             # 2. 배정 일시
             if "time_info" in self.value_labels:
-                self.value_labels["time_info"].setText(
-                    f'오후 {self.seat_data["assigned_time_start"]} ~ 오후 {self.seat_data["assigned_time_end"]}'
-                )
+
+                start_str = self._format_time_str(self.seat_data["assigned_time_start"])
+                end_str = self._format_time_str(self.seat_data["assigned_time_end"])
+                self.value_labels["time_info"].setText(f'{start_str} ~ {end_str}')
+                
+                # self.value_labels["time_info"].setText(
+                #     f'오후 {self.seat_data["assigned_time_start"]} ~ 오후 {self.seat_data["assigned_time_end"]}'
+                # )
             
             # 3. 잔여 시간 (HTML)
             if "remain_info" in self.value_labels:
@@ -279,9 +284,12 @@ class ReturnSeatPage(BasePage):
             
             # 4. 연장 가능 시간
             if "extend_info" in self.value_labels:
-                self.value_labels["extend_info"].setText(
-                    f'오후 {self.seat_data["extend_time"]}'
-                )
+                extend_str = self._format_time_str(self.seat_data["extend_time"])
+                self.value_labels["extend_info"].setText(f'{extend_str}')
+
+                # self.value_labels["extend_info"].setText(
+                #     f'오후 {self.seat_data["extend_time"]}'
+                # )
         except RuntimeError:
             print("Warning: 페이지가 닫혀 UI를 업데이트할 수 없습니다.")
         except Exception as e:
@@ -428,3 +436,22 @@ class ReturnSeatPage(BasePage):
                 
         except Exception as e:
             QMessageBox.critical(self, "오류", f"통신 오류: {e}")
+    
+    def _format_time_str(self, time_str):
+        """ 'HH:MM' 문자열을 받아 '오전/오후 H:MM' 형태로 변환 """
+        if not time_str or time_str == "-":
+            return "-"
+        try:
+            # "14:00" -> 14, 0
+            hour, minute = map(int, time_str.split(':'))
+            
+            ampm = "오후" if hour >= 12 else "오전"
+            
+            # 12시간제로 변환 (13->1, 0->12)
+            display_hour = hour % 12
+            if display_hour == 0: 
+                display_hour = 12
+            
+            return f"{ampm} {display_hour}:{minute:02d}"
+        except Exception:
+            return time_str # 변환 실패 시 원본 반환
