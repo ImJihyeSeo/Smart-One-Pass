@@ -39,6 +39,12 @@ class PredictionResultPage(BasePage):
         card_layout.setContentsMargins(50, 40, 50, 40)
         card_layout.setSpacing(30)
 
+        # 백엔도 연동ㅇ
+        # ✅ [수정 1] 그리드 레이아웃 초기화 및 멤버 변수 할당
+        self.grid_layout = QGridLayout()
+        self.grid_layout.setSpacing(20) 
+        self.grid_layout.setContentsMargins(0, 0, 0, 0)
+
         # 예측 결과
         result_grid = self._create_result_grid()
         grid_container = QWidget()
@@ -66,7 +72,9 @@ class PredictionResultPage(BasePage):
         for i, data in enumerate(result_data):
             # _create_status_card 함수는 data 딕셔너리를 그대로 사용하도록 설계되어 있으므로
             # 백엔드에서 키값('name', 'status', 'color')만 맞춰주면 완벽하게 호환됩니다.
-            card = self._create_status_card(data, i)
+            # card = self._create_status_card(data, i)
+            # ✅ [수정 2] 분리된 카드 생성 함수 호출
+            card = self._create_status_card(data)
             
             row = i // 2
             col = i % 2
@@ -288,3 +296,77 @@ class PredictionResultPage(BasePage):
             grid.addWidget(item_frame, row, col, alignment=Qt.AlignCenter) 
             
         return grid
+
+    # ✅ [수정 3] 카드 생성 로직을 별도 함수로 분리 (update_ui에서 사용하기 위해)
+    def _create_status_card(self, data):
+        """
+        개별 예측 결과 카드 위젯 생성
+        data: {'name': '...', 'status': '...', 'color': '...'}
+        """
+        CARD_FIXED_SIZE = 270 
+        ICON_HEIGHT = 130 
+        
+        item_frame = QFrame() 
+        item_frame.setFixedSize(CARD_FIXED_SIZE, CARD_FIXED_SIZE) 
+        
+        item_layout = QVBoxLayout(item_frame)
+        item_layout.setContentsMargins(10, 15, 10, 15) 
+        item_layout.setSpacing(5) 
+        item_layout.addStretch(1) 
+        
+        # 1. 열람실 이름 (줄바꿈 처리)
+        room_name = data.get('name', '알 수 없음')
+        name_label = QLabel(room_name.replace('\n', '<br>'))
+        name_label.setTextFormat(Qt.RichText)
+        name_label.setAlignment(Qt.AlignCenter)
+        name_label.setStyleSheet("""
+            font-size: 26px; 
+            color: #ffffff; 
+            background: transparent; 
+            margin: 0;
+            min-height: 70px;
+        """)
+        item_layout.addWidget(name_label)
+        item_layout.addSpacing(10)
+        
+        # 2. 얼굴 아이콘
+        icon_label = QLabel()
+        icon_label.setAlignment(Qt.AlignCenter)
+        status_text = data.get('status', '미정')
+        icon_path = self._get_icon_path(status_text)
+        
+        if icon_path and os.path.exists(icon_path):
+            pixmap = QPixmap(icon_path)
+            if not pixmap.isNull():
+                scaled_pixmap = pixmap.scaledToHeight(ICON_HEIGHT, Qt.SmoothTransformation)
+                icon_label.setPixmap(scaled_pixmap)
+        item_layout.addWidget(icon_label, alignment=Qt.AlignCenter)
+        
+        # 3. 상태 텍스트
+        color_code = data.get('color', '#FFFFFF')
+        status_label = QLabel(status_text)
+        status_label.setAlignment(Qt.AlignCenter)
+        status_label.setStyleSheet(
+            f"font-size: 26px; color: {color_code}; font-weight: bold; margin: 0; background: transparent;"
+        )
+        item_layout.addWidget(status_label)
+        item_layout.addStretch(1) 
+        
+        return item_frame
+
+    # ✅ [수정 4] 초기 로드용 함수 (더미 데이터 사용 또는 빈 상태)
+    def _init_result_grid(self):
+        # API 호출 전 보여줄 임시 데이터 (선택 사항)
+        # 실제로는 update_ui가 호출되면서 덮어씌워집니다.
+        temp_results = [
+            {"name": "제1열람실", "status": "로딩중", "color": "#999999"},
+            {"name": "제2-1열람실", "status": "로딩중", "color": "#999999"},
+            {"name": "제2-2열람실", "status": "로딩중", "color": "#999999"},
+            {"name": "제2-2열람실\n(대학원생 전용)", "status": "로딩중", "color": "#999999"},
+        ]
+        
+        for i, data in enumerate(temp_results):
+            card = self._create_status_card(data)
+            row = i // 2
+            col = i % 2
+            self.grid_layout.addWidget(card, row, col, alignment=Qt.AlignCenter)

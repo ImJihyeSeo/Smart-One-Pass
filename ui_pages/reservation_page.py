@@ -12,6 +12,7 @@ from ui_style import KOREAN_LOCALE, BUTTON_STYLE, ICON_BUTTON_STYLE, OverlayWidg
 # 순환 참조 방지를 위해 함수 안에서 import 하거나, 
 # 파일 상단 try-except 구문으로 처리하는 것이 좋습니다.
 from .prediction_result_page import PredictionResultPage
+from PySide6.QtWidgets import QStackedWidget
 
 # 백엔드 API 연동
 import sys
@@ -886,21 +887,37 @@ class ReservationPage(BasePage):
                 # (prediction_result_page.py에 update_ui 메서드가 있어야 함)
                 if hasattr(result_page, 'update_ui'):
                     result_page.update_ui(results)
-                else:
-                    print("⚠️ Warning: update_ui 메서드가 PredictionResultPage에 없습니다.")
+                
+                # ✅ [수정된 부분] 변수 이름 상관없이 QStackedWidget을 찾아서 화면 전환
+                parent_widget = self.parent()
+                stack = None
 
                 # (3) 화면 전환 (메인 윈도우의 스택 위젯을 제어해야 함)
                 # self.parent()는 보통 StackedWidget이나 MainWindow입니다.
                 # 구조상 switch_callback을 통해 페이지를 바꾸는 것이 더 안전할 수 있습니다.
                 # 하지만 '새로운 페이지 인스턴스'를 띄워야 하므로, 아래 방식을 사용합니다.
                 
-                # 메인 윈도우 찾기 (parent를 타고 올라감)
-                main_window = self.window() 
-                if main_window and hasattr(main_window, 'stacked_widget'):
-                    main_window.stacked_widget.addWidget(result_page)
-                    main_window.stacked_widget.setCurrentWidget(result_page)
+                # 1. 바로 위 부모가 스택 위젯인지 확인
+                if isinstance(parent_widget, QStackedWidget):
+                    stack = parent_widget
+                # 2. 아니면 윈도우 전체에서 스택 위젯 검색
                 else:
-                    print("❌ Error: 메인 윈도우의 stacked_widget을 찾을 수 없습니다.")
+                    main_win = self.window()
+                    stack = main_win.findChild(QStackedWidget)
+                
+                if stack:
+                    stack.addWidget(result_page)
+                    stack.setCurrentWidget(result_page)
+                else:
+                    print("❌ Error: 화면을 전환할 QStackedWidget을 찾을 수 없습니다.")
+
+                # # 메인 윈도우 찾기 (parent를 타고 올라감)
+                # main_window = self.window() 
+                # if main_window and hasattr(main_window, 'stacked_widget'):
+                #     main_window.stacked_widget.addWidget(result_page)
+                #     main_window.stacked_widget.setCurrentWidget(result_page)
+                # else:
+                #     print("❌ Error: 메인 윈도우의 stacked_widget을 찾을 수 없습니다.")
 
             else:
                 # 서버 에러 처리
