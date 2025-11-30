@@ -67,6 +67,22 @@ def predict_library_seats(target_dt: datetime):
         ema_short = last_log['ema_short'] if last_log else 0.0
         ema_periodic = last_log['ema_periodic'] if last_log else 0.0
 
+        # ==========================================================
+        # [수정] 시험 기간 여부 자동 판단 로직 추가
+        # ==========================================================
+        
+        # 예측하려는 날짜(target_dt)의 연도, 날짜만 추출
+        target_date = target_dt.date() 
+        current_year = target_dt.year
+
+        # 시험 기간 설정: 11월 17일 ~ 12월 7일
+        exam_start = datetime(current_year, 11, 17).date()
+        exam_end = datetime(current_year, 12, 7).date()
+
+        # 해당 날짜가 범위 내에 있으면 1, 아니면 0
+        is_exam_period = 1 if exam_start <= target_date <= exam_end else 0
+        
+        # ==========================================================
         # 3. 모델 입력 데이터 생성
         # (학습 때 사용한 피처 순서와 구성을 맞춰야 함)
         input_data = {
@@ -76,7 +92,7 @@ def predict_library_seats(target_dt: datetime):
             '일': [target_dt.day],
             '시간': [target_dt.hour],
             '요일코드': [target_dt.weekday()],
-            'Exam_Flag': [0],
+            'Exam_Flag': [is_exam_period],
             'Holiday_Flag': [0],
             'Post_Holiday_Flag': [0],
             'EMA_Periodic': [ema_periodic],
