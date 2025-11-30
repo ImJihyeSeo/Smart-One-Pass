@@ -15,6 +15,16 @@ except:
     print("❌ [Service] 모델 파일을 찾을 수 없습니다.")
     model = None
 
+
+# 모델 학습 시 사용했던 매핑 (역방향)
+# 모델이 "1"을 1.0으로, "2-1"을 2.0으로 학습했다면 변환해줘야 합니다.
+MODEL_INPUT_MAPPING = {
+    "1": 1,
+    "2-1": 2,
+    "2-2": 3,
+    "2-2_grad": 4
+}
+
 def get_status_and_color(remain: int, total: int):
     """
     ★ 프론트엔드 디자인 규칙을 여기서 정의합니다 ★
@@ -42,10 +52,10 @@ def predict_library_seats(target_dt: datetime):
 
     # 1. 예측 대상 열람실 정의 (DB의 study_room 테이블에서 가져와도 됨)
     room_list = [
-        {"id": "제1열람실", "total": 375},
-        {"id": "제2-1열람실", "total": 270},
-        {"id": "제2-2열람실", "total": 136},
-        {"id": "제2-2열람실 (대학원생 전용)", "total": 62}
+        {"id": "1", "total": 375},
+        {"id": "2-1", "total": 270},
+        {"id": "2-2", "total": 136},
+        {"id": "2-2_grad", "total": 62}
     ]
     
     results = []
@@ -54,6 +64,12 @@ def predict_library_seats(target_dt: datetime):
         room_id = room['id']
         total = room['total']
 
+        # 1. 입력받은 표준 ID ("2-1")를 모델용 숫자 (2)로 변환
+        model_room_id = MODEL_INPUT_MAPPING.get(room_id)
+        
+        if model_room_id is None:
+            return {"error": "잘못된 열람실 ID입니다."}
+
         # 2. DB에서 가장 최신 EMA 값 조회 (Feature Log 테이블)
         cursor.execute("""
             SELECT ema_short, ema_periodic 
@@ -61,7 +77,7 @@ def predict_library_seats(target_dt: datetime):
             WHERE room_id = %s 
             ORDER BY record_time DESC 
             LIMIT 1
-        """, (room_id,))
+        """, (model_room_id,))
         
         last_log = cursor.fetchone()
         ema_short = last_log['ema_short'] if last_log else 0.0
@@ -119,9 +135,9 @@ def predict_library_seats(target_dt: datetime):
             'EMA_Short': [ema_short],
             
             # One-Hot Encoding 처리 (수동)
-            '열람실 ID_제2-1열람실': [1 if room_id == "제2-1열람실" else 0],
-            '열람실 ID_제2-2열람실': [1 if room_id == "제2-2열람실" else 0],
-            '열람실 ID_제2-2열람실 (대학원생 전용)': [1 if room_id == "제2-2열람실 (대학원생 전용)" else 0]
+            '열람실 ID_제2-1열람실': [1 if room_id == "2-1" else 0],
+            '열람실 ID_제2-2열람실': [1 if room_id == "2-2" else 0],
+            '열람실 ID_제2-2열람실 (대학원생 전용)': [1 if room_id == "2-2_grad" else 0]
             # 제1열람실은 학습 시 drop_first=True로 제거되었을 가능성이 큼 (확인 필요)
         }
         
