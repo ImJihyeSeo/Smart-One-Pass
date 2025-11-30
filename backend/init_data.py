@@ -1,4 +1,5 @@
 # init_data.py
+# 좌석 정보와 열람실 정보를 입력하는 코드
 import psycopg2
 from database import get_db_connection
 
