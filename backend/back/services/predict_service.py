@@ -89,22 +89,22 @@ def predict_library_seats(target_dt: datetime):
             
             # 6. 결과 리스트 추가
             results.append({
-                "열람실명": room_name,
-                "전체좌석": str(current_cap),
-                "예측잔여석": str(pred_remain),
-                "혼잡도": status,
-                "색상": color
+                "name": room_name,         # 열람실명 -> name
+                "total": str(current_cap), # 전체좌석 -> total
+                "remain": str(pred_remain),# 예측잔여석 -> remain
+                "status": status,          # 혼잡도 -> status
+                "color": color             # 색상 -> color
             })
             
         except Exception as e:
             print(f"❌ 예측 에러 ({room_name}): {str(e)}")
             # 에러 시 기본값 반환
             results.append({
-                "열람실명": room_name,
-                "전체좌석": str(ROOM_CAPACITY.get(room_name, 0)),
-                "예측잔여석": "Error",
-                "혼잡도": "알수없음",
-                "색상": "#9e9e9e"
+                "name": room_name,
+                "total": str(ROOM_CAPACITY.get(room_name, 0)),
+                "remain": "Error",
+                "status": "알수없음",
+                "color": "#9e9e9e"
             })
 
     return results

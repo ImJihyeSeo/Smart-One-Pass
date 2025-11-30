@@ -862,7 +862,7 @@ class ReservationPage(BasePage):
             response = requests.post(
                 f"{API_BASE_URL}/predict/results", # /seat을 제거하고 /predict로 요청
                 json={"target_time": target_datetime},
-                timeout=5 # 5초 타임아웃 설정 (앱 멈춤 방지)
+                timeout=20 # 5초 타임아웃 설정 (앱 멈춤 방지)
             )
             
             if response.status_code == 200:

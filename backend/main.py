@@ -2,7 +2,6 @@ import uvicorn
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from database import initialize_db # database.py에 정의된 초기화 함수 임포트
-import joblib
 import pandas as pd
 import os
 
@@ -17,16 +16,6 @@ from back.api import seat_api
 # 1. 현재 파일(main.py)이 있는 폴더 경로를 찾습니다.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 2. 파일 이름을 'final_library_model.pkl'로 정확히 적어줍니다.
-MODEL_PATH = os.path.join(BASE_DIR, "final_library_model.pkl")
-
-# 3. 모델 로드
-if os.path.exists(MODEL_PATH):
-    model = joblib.load(MODEL_PATH)
-    print(f"✅ 모델 로드 성공: {MODEL_PATH}")
-else:
-    print(f"❌ 모델 파일을 찾을 수 없습니다: {MODEL_PATH}")
-    model = None
 
 # 💡 API 라우터 임포트 (back.api 폴더에서 가져온다고 가정)
 from back.api.user_api import router as user_router 
