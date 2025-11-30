@@ -82,6 +82,26 @@ def predict_library_seats(target_dt: datetime):
         # 해당 날짜가 범위 내에 있으면 1, 아니면 0
         is_exam_period = 1 if exam_start <= target_date <= exam_end else 0
         
+
+        # 방학
+        # 예측하려는 날짜(target_dt)의 연도, 날짜만 추출
+        target_date = target_dt.date() 
+        current_year = target_dt.year
+
+        if target_dt.month <= 3:
+            vacation_start_year = current_year - 1
+        else:
+            vacation_start_year = current_year
+            
+
+        # 시험 기간 설정: 11월 17일 ~ 12월 7일
+        holi_start = datetime(vacation_start_year, 12, 22).date()
+        holi_end = datetime(vacation_start_year + 1, 3, 1).date()
+
+        # 해당 날짜가 범위 내에 있으면 1, 아니면 0
+        is_holi_period = 1 if holi_start <= target_date <= holi_end else 0
+        
+
         # ==========================================================
         # 3. 모델 입력 데이터 생성
         # (학습 때 사용한 피처 순서와 구성을 맞춰야 함)
@@ -93,7 +113,7 @@ def predict_library_seats(target_dt: datetime):
             '시간': [target_dt.hour],
             '요일코드': [target_dt.weekday()],
             'Exam_Flag': [is_exam_period],
-            'Holiday_Flag': [0],
+            'Holiday_Flag': [is_holi_period],
             'Post_Holiday_Flag': [0],
             'EMA_Periodic': [ema_periodic],
             'EMA_Short': [ema_short],
