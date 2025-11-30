@@ -6,6 +6,8 @@ import joblib
 import pandas as pd
 import os
 
+from collector import collect_update
+
 
 from apscheduler.schedulers.background import BackgroundScheduler # 👈 추가
 from back.services.core_service import execute_auto_return
@@ -51,9 +53,12 @@ async def lifespan_handler(app: FastAPI):
 
     # 'execute_auto_return' 함수를 1분(minutes=1)마다 실행
     scheduler.add_job(execute_auto_return, 'interval', minutes=1)
+
+    # 2. 👇 [추가] 좌석 정보 수집 (collector)
+    # trigger='cron', minute='0,30' -> 매 시간 0분과 30분에 실행 (예: 12:00, 12:30, 13:00...)
+    scheduler.add_job(collect_update, 'cron', minute='0,30')
     scheduler.start()
     
-    # yield: 이 시점에서 서버가 외부 요청을 받기 시작합니다.
     yield 
     
     # [SHUTDOWN 로직: 서버 종료 시]
