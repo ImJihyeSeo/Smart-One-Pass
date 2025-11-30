@@ -1,168 +1,110 @@
 # back/services/predict_service.py
 
-import joblib
+import os
 import pandas as pd
-import numpy as np
 from datetime import datetime
-from database import get_db_connection
+from prophet.serialize import model_from_json
 
-# 모델 파일 경로 (main.py 옆에 있다고 가정)
-MODEL_PATH = "final_library_model.pkl"
-try:
-    model = joblib.load(MODEL_PATH)
-    print("✅ [Service] 예측 모델 로드 완료")
-except:
-    print("❌ [Service] 모델 파일을 찾을 수 없습니다.")
-    model = None
+# 1. 모델 파일들이 있는 경로 설정 (main.py와 같은 위치라고 가정)
+# 만약 파일 위치가 다르면 경로를 수정해주세요.
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # back 폴더 상위 등 경로 확인 필요
+# 혹은 그냥 절대 경로로 지정해도 됩니다.
 
+# 2. 4개 모델 로드 (서버 켜질 때 한 번만 실행됨)
+models = {}
+room_files = {
+    '제1열람실': 'model_room_1.json',
+    '제2-1열람실': 'model_room_2_1.json',
+    '제2-2열람실': 'model_room_2_2.json',
+    '제2-2열람실 (대학원생 전용)': 'model_room_graduate.json'
+}
 
-# 모델 학습 시 사용했던 매핑 (역방향)
-# 모델이 "1"을 1.0으로, "2-1"을 2.0으로 학습했다면 변환해줘야 합니다.
-MODEL_INPUT_MAPPING = {
-    "1": '1',
-    "2-1": '2',
-    "2-2": '3',
-    "2-2_grad": '4'
+print("🔄 [Prophet] 모델 로딩 시작...")
+for room_name, filename in room_files.items():
+    # 파일 경로: 현재 폴더 혹은 상위 폴더 등 실제 json 파일 위치에 맞게 조정
+    # 예시: main.py랑 같은 위치에 json 파일들이 있다면:
+    file_path = os.path.join(os.getcwd(), filename) 
+    
+    if os.path.exists(file_path):
+        with open(file_path, 'r') as fin:
+            models[room_name] = model_from_json(fin.read())
+        print(f"✅ 모델 로드 완료: {room_name}")
+    else:
+        print(f"❌ 모델 파일을 찾을 수 없음: {filename}")
+
+# 3. [중요] 각 열람실 총 좌석 수 (Cap 설정용)
+# 아까 코드 돌려서 나온 ROOM_CAPACITY 값을 참고해서 정확히 적어주세요.
+ROOM_CAPACITY = {
+    '제1열람실': 375,
+    '제2-1열람실': 270, 
+    '제2-2열람실': 136,
+    '제2-2열람실 (대학원생 전용)': 62
 }
 
 def get_status_and_color(remain: int, total: int):
     """
-    ★ 프론트엔드 디자인 규칙을 여기서 정의합니다 ★
-    잔여석 비율에 따라 텍스트와 색상 코드를 반환합니다.
+    잔여석 비율에 따른 혼잡도 및 색상 반환
     """
-    if total == 0: return "만석", "#9e9e9e" # 회색
+    if total == 0: return "만석", "#9e9e9e"
     
     ratio = remain / total
-    
     if remain <= 0:
         return "만석", "#9e9e9e" # 회색
     elif ratio >= 0.5:
-        return "여유", "#00c853" # 초록색
+        return "여유", "#4caf50" # 초록
     elif ratio >= 0.2:
-        return "보통", "#ff9100" # 주황색
+        return "보통", "#ff9800" # 주황
     else:
-        return "혼잡", "#ff3d00" # 빨간색
+        return "혼잡", "#f44336" # 빨강
 
 def predict_library_seats(target_dt: datetime):
     """
-    특정 시간(target_dt)에 대한 모든 열람실의 상태를 예측합니다.
+    Prophet 모델을 사용하여 4개 열람실의 잔여석을 예측
     """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # 1. 예측 대상 열람실 정의 (DB의 study_room 테이블에서 가져와도 됨)
-    room_list = [
-        {"id": "1", "total": 375},
-        {"id": "2-1", "total": 270},
-        {"id": "2-2", "total": 136},
-        {"id": "2-2_grad", "total": 62}
-    ]
-    
     results = []
 
-    for room in room_list:
-        room_id = room['id']
-        total = room['total']
-
-        # 1. 입력받은 표준 ID ("2-1")를 모델용 숫자 (2)로 변환
-        model_room_id = MODEL_INPUT_MAPPING.get(room_id)
-        
-        if model_room_id is None:
-            return {"error": "잘못된 열람실 ID입니다."}
-
-        # 2. DB에서 가장 최신 EMA 값 조회 (Feature Log 테이블)
-        cursor.execute("""
-            SELECT ema_short, ema_periodic 
-            FROM study_room_feature_log 
-            WHERE room_id = %s 
-            ORDER BY record_time DESC 
-            LIMIT 1
-        """, (model_room_id,))
-        
-        last_log = cursor.fetchone()
-        ema_short = last_log['ema_short'] if last_log else 0.0
-        ema_periodic = last_log['ema_periodic'] if last_log else 0.0
-
-        # ==========================================================
-        # [수정] 시험 기간 여부 자동 판단 로직 추가
-        # ==========================================================
-        
-        # 예측하려는 날짜(target_dt)의 연도, 날짜만 추출
-        target_date = target_dt.date() 
-        current_year = target_dt.year
-
-        # 시험 기간 설정: 11월 17일 ~ 12월 7일
-        exam_start = datetime(current_year, 11, 17).date()
-        exam_end = datetime(current_year, 12, 7).date()
-
-        # 해당 날짜가 범위 내에 있으면 1, 아니면 0
-        is_exam_period = 1 if exam_start <= target_date <= exam_end else 0
-        
-
-        # 방학
-        # 예측하려는 날짜(target_dt)의 연도, 날짜만 추출
-        target_date = target_dt.date() 
-        current_year = target_dt.year
-
-        if target_dt.month <= 3:
-            vacation_start_year = current_year - 1
-        else:
-            vacation_start_year = current_year
-            
-
-        # 시험 기간 설정: 11월 17일 ~ 12월 7일
-        holi_start = datetime(vacation_start_year, 12, 22).date()
-        holi_end = datetime(vacation_start_year + 1, 3, 1).date()
-
-        # 해당 날짜가 범위 내에 있으면 1, 아니면 0
-        is_holi_period = 1 if holi_start <= target_date <= holi_end else 0
-        
-
-        # ==========================================================
-        # 3. 모델 입력 데이터 생성
-        # (학습 때 사용한 피처 순서와 구성을 맞춰야 함)
-        input_data = {
-            '전체좌석': [total],
-            '년': [target_dt.year],
-            '월': [target_dt.month],
-            '일': [target_dt.day],
-            '시간': [target_dt.hour],
-            '요일코드': [target_dt.weekday()],
-            'Exam_Flag': [is_exam_period],
-            'Holiday_Flag': [is_holi_period],
-            'Post_Holiday_Flag': [0],
-            'EMA_Periodic': [ema_periodic],
-            'EMA_Short': [ema_short],
-            
-            # One-Hot Encoding 처리 (수동)
-            '열람실 ID_제2-1열람실': [1 if room_id == "2-1" else 0],
-            '열람실 ID_제2-2열람실': [1 if room_id == "2-2" else 0],
-            '열람실 ID_제2-2열람실 (대학원생 전용)': [1 if room_id == "2-2_grad" else 0]
-            # 제1열람실은 학습 시 drop_first=True로 제거되었을 가능성이 큼 (확인 필요)
-        }
-        
-        # 4. 예측 수행
+    # 예측용 DataFrame 생성 (Prophet은 ds, cap 컬럼이 필요함)
+    future = pd.DataFrame({'ds': [target_dt]})
+    
+    for room_name, model in models.items():
         try:
-            df_input = pd.DataFrame(input_data)
+            # 1. Cap(상한선) 설정 (Logistic Growth 학습 시 필수)
+            current_cap = ROOM_CAPACITY.get(room_name, 100)
+            future['cap'] = current_cap
+            future['floor'] = 0
             
-            # 모델의 feature_names_in_ 을 이용해 컬럼 순서 강제 정렬 (에러 방지)
-            if hasattr(model, 'feature_names_in_'):
-                 df_input = df_input.reindex(columns=model.feature_names_in_, fill_value=0)
-
-            pred_remain = int(model.predict(df_input)[0])
+            # 2. 예측 수행
+            forecast = model.predict(future)
+            
+            # 3. 결과 추출 (yhat이 예측값)
+            pred_float = forecast.iloc[0]['yhat']
+            
+            # 4. 정수 변환 및 범위 보정 (0 ~ Max 사이로 가두기)
+            pred_remain = int(round(pred_float))
+            if pred_remain < 0: pred_remain = 0
+            if pred_remain > current_cap: pred_remain = current_cap
+            
+            # 5. 혼잡도 라벨링
+            status, color = get_status_and_color(pred_remain, current_cap)
+            
+            # 6. 결과 리스트 추가
+            results.append({
+                "열람실명": room_name,
+                "전체좌석": str(current_cap),
+                "예측잔여석": str(pred_remain),
+                "혼잡도": status,
+                "색상": color
+            })
+            
         except Exception as e:
-            print(f"⚠️ 예측 실패 ({room_id}): {e}")
-            pred_remain = 0 # 에러 시 보수적으로 0 처리
+            print(f"❌ 예측 에러 ({room_name}): {str(e)}")
+            # 에러 시 기본값 반환
+            results.append({
+                "열람실명": room_name,
+                "전체좌석": str(ROOM_CAPACITY.get(room_name, 0)),
+                "예측잔여석": "Error",
+                "혼잡도": "알수없음",
+                "색상": "#9e9e9e"
+            })
 
-        # 5. 프론트엔드용 데이터 가공 (★ 핵심 ★)
-        status, color = get_status_and_color(pred_remain, total)
-
-        results.append({
-            "name": room_id,
-            "status": status,  # 예: "여유"
-            "color": color,    # 예: "#00c853"
-            "seats": f"{pred_remain}/{total}" # 상세 숫자 (선택 사항)
-        })
-
-    conn.close()
     return results
