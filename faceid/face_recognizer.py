@@ -188,28 +188,35 @@ class FaceRecognizer:
         self.last_face = None
         self.infer_times_ms: List[float] = []
 
+        # ===== 스푸핑 안정화 변수 =====
+        self.SCORE_WINDOW_SIZE = 5
+        self.score_history = []
+        self.SPOOF_WINDOW_SIZE = 5
+        self.spoof_counter = 0
+
     # ---------------- 임베딩 추출 ----------------
     def _embed_biggest_once(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None) -> Tuple[Optional[np.ndarray], Optional[dict]]:
         """프레임스킵/캐시 없이, 실제로 한 번 추론"""
         faces = self.app.get(frame_bgr) if rrect is None else get_faces_in_rrect(self.app, frame_bgr, *rrect)
         if not faces:
-            return None, None, False
+            return None, None, 1.0
 
         faces.sort(key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]), reverse=True)
         f = faces[0]
 
         # 스푸핑 검사
-        is_live, live_score = self.anti_spoof_detector.detect_spoofing(frame_bgr, f.bbox)
+        _, live_score = self.anti_spoof_detector.detect_spoofing(frame_bgr, f.bbox)
+
+        if self.frame_idx == 0:
+            live_score = 1.0
+        
         # print(f"[AntiSpoofing] Score: {live_score:.4f}")
-        if not is_live:
-            # 임베딩 추출 중단
-            return None, f, False
         
         emb = getattr(f, "normed_embedding", None)
         if emb is None:
             e = f.embedding
             emb = e / np.linalg.norm(e)
-        return emb.astype("float32"), f, True
+        return emb.astype("float32"), f, live_score
 
     def embed_biggest(self, frame_bgr: np.ndarray, rrect: Optional[Tuple] = None, use_skip: bool = False) -> Tuple[Optional[np.ndarray], Optional[dict], bool]:
         """
@@ -220,22 +227,35 @@ class FaceRecognizer:
         self.frame_idx += 1
 
         run_infer = (not use_skip) or (self.frame_idx % FRAME_SKIP == 0) or (self.last_emb is None)
-        is_live = False
+        is_live = True
 
         if run_infer:
             t0 = time.perf_counter()
-            emb, face, is_live = self._embed_biggest_once(frame_bgr, rrect)
+            emb, face, live_score = self._embed_biggest_once(frame_bgr, rrect)
             t1 = time.perf_counter()
 
             if emb is not None:
                 self.infer_times_ms.append((t1 - t0) * 1000.0)  # ms 기록
+
+            if face is not None:
+                self.score_history.append(live_score)
+                if len(self.score_history) > self.SCORE_WINDOW_SIZE:
+                    self.score_history.pop(0)
+
+            # 스푸핑 판정
+            current_score = np.mean(self.score_history) if self.score_history else 0.0
+            if current_score < self.anti_spoof_detector.LIVE_THRESHOLD:
+                self.spoof_counter += 1
+            else:
+                self.spoof_counter = 0
+            is_live = (self.spoof_counter < self.SPOOF_WINDOW_SIZE)
 
             self.last_emb, self.last_face = emb, face
             self.last_is_live = is_live
         else:
             # 추론 스킵 → 직전 결과 재사용
             emb, face = self.last_emb, self.last_face
-            is_live = getattr(self, 'last_is_live', False)
+            is_live = getattr(self, 'last_is_live', True)
 
         return emb, face, is_live
 
@@ -307,6 +327,8 @@ class FaceRecognizer:
         self.last_emb = None
         self.last_face = None
         self.infer_times_ms.clear()
+        self.score_history.clear()
+        self.spoof_counter = 0
 
     def get_latency_stats(self):
         if not self.infer_times_ms:

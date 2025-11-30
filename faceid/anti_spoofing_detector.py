@@ -13,13 +13,13 @@ MODEL_PATH = os.path.join(
 )
 
 INPUT_SIZE = (128, 128)
-LIVE_THRESHOLD = 0.4
 
 class AntiSpoofingDetector:
     def __init__(self):
         self.session = None
         self.input_name = 'input'
         self.output_name = 'output'
+        self.LIVE_THRESHOLD = 0.7
         
         try:
             self.session = onnxruntime.InferenceSession(MODEL_PATH)
@@ -88,14 +88,11 @@ class AntiSpoofingDetector:
             if output.shape[-1] == 2:
                 exp_output = np.exp(output)
                 probabilities = exp_output / np.sum(exp_output, axis=1, keepdims=True)
-                
                 live_score = probabilities[0, 0]
-                #print(f"[DEBUG] Raw Output: {output[0]}")
-                #print(f"[DEBUG] Live Score (Prob[1]): {live_score:.4f}")
             else:
                 live_score = output[0, 0] 
 
-            is_live = live_score > LIVE_THRESHOLD
+            is_live = live_score > self.LIVE_THRESHOLD
             
             return is_live, float(live_score)
 
