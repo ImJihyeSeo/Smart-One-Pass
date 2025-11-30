@@ -8,6 +8,15 @@ SPAN_SHORT = 1
 SPAN_PERIODIC = 1
 FILE_PATH = 'library_seats.csv'
 
+# 🚨 [핵심 수정] CSV의 한글 이름 -> DB의 room_id로 변환하는 지도
+# init_data.py에 정의된 ID와 정확히 일치해야 합니다.
+ROOM_MAPPING = {
+    "제1열람실": "1",
+    "제2-1열람실": "2-1",
+    "제2-2열람실": "2-2",
+    "제2-2열람실(대학원)": "2-2_grad"
+}
+
 def migrate_csv_to_db():
     print(f"🚀 [AWS 전송] '{FILE_PATH}' 데이터를 DB로 업로드합니다...")
     
@@ -33,6 +42,17 @@ def migrate_csv_to_db():
         df['record_time'] = pd.to_datetime(df['날짜'])
     elif 'record_time' in df.columns:
         df['record_time'] = pd.to_datetime(df['record_time'])
+    
+    # 🚨 [핵심 수정] 한글 이름을 ID로 변환 ('제1열람실' -> '1')
+    # map 함수를 사용하여 변환하고, 매핑 안 된 데이터는 원본 이름을 유지(디버깅용)
+    df['room_id'] = df['열람실명'].map(ROOM_MAPPING)
+
+    # 매핑되지 않은(NaN) 데이터가 있는지 확인
+    unknown_rooms = df[df['room_id'].isna()]['열람실명'].unique()
+    if len(unknown_rooms) > 0:
+        print(f"⚠️ 경고: 매핑되지 않은 열람실 이름이 있습니다: {unknown_rooms}")
+        print("   -> ROOM_MAPPING 딕셔너리에 해당 이름을 추가해주세요.")
+        return # 에러 방지를 위해 중단
     
     # 시간순 정렬
     df = df.sort_values(by=['열람실명', 'record_time'])

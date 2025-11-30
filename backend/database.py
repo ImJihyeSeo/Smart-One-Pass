@@ -71,13 +71,6 @@ def initialize_db():
             close TIME NOT NULL
         );
 
-        # -- study_room_seat 테이블
-        # CREATE TABLE IF NOT EXISTS study_room_seat (
-        #     room_id VARCHAR(50) NOT NULL, 
-        #     seat_number INTEGER NOT NULL, 
-        #     PRIMARY KEY (room_id, seat_number), 
-        #     FOREIGN KEY (room_id) REFERENCES study_room(room_id)
-        # );
 
         -- seat_reservation 테이블 (reservation_id: INTEGER -> SERIAL, 날짜/시간 타입 변경)
         CREATE TABLE IF NOT EXISTS seat_reservation (
@@ -151,3 +144,13 @@ def initialize_db():
         conn.close()
 
     # Note: main.py에서 initialize_db()를 서버 시작 전에 호출해야 합니다.
+
+
+    
+        # -- study_room_seat 테이블
+        # CREATE TABLE IF NOT EXISTS study_room_seat (
+        #     room_id VARCHAR(50) NOT NULL, 
+        #     seat_number INTEGER NOT NULL, 
+        #     PRIMARY KEY (room_id, seat_number), 
+        #     FOREIGN KEY (room_id) REFERENCES study_room(room_id)
+        # );
