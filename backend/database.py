@@ -71,13 +71,13 @@ def initialize_db():
             close TIME NOT NULL
         );
 
-        -- study_room_seat 테이블
-        CREATE TABLE IF NOT EXISTS study_room_seat (
-            room_id VARCHAR(50) NOT NULL, 
-            seat_number INTEGER NOT NULL, 
-            PRIMARY KEY (room_id, seat_number), 
-            FOREIGN KEY (room_id) REFERENCES study_room(room_id)
-        );
+        # -- study_room_seat 테이블
+        # CREATE TABLE IF NOT EXISTS study_room_seat (
+        #     room_id VARCHAR(50) NOT NULL, 
+        #     seat_number INTEGER NOT NULL, 
+        #     PRIMARY KEY (room_id, seat_number), 
+        #     FOREIGN KEY (room_id) REFERENCES study_room(room_id)
+        # );
 
         -- seat_reservation 테이블 (reservation_id: INTEGER -> SERIAL, 날짜/시간 타입 변경)
         CREATE TABLE IF NOT EXISTS seat_reservation (
@@ -102,19 +102,6 @@ def initialize_db():
             used_seat INTEGER NOT NULL, 
             FOREIGN KEY (room_id) REFERENCES study_room(room_id)
         );
-
-        -- 크롤링할 원본 데이터를 보관하는 곳
-        CREATE TABLE IF NOT EXISTS raw_library_seats (
-            raw_id SERIAL PRIMARY KEY,
-            record_time TIMESTAMP WITH TIME ZONE NOT NULL, -- 시간 (년월일시분)
-            room_name VARCHAR(50) NOT NULL,                -- 열람실 이름
-            total_seat INTEGER NOT NULL,                   -- 전체 좌석
-            used_seat INTEGER NOT NULL,                    -- 사용 좌석
-            
-            -- 빠른 검색을 위해 시간에 인덱스 걸기
-            UNIQUE(record_time, room_name) 
-        );
-        CREATE INDEX IF NOT EXISTS idx_raw_time ON raw_library_seats (record_time);
 
         --Random Forest용 로그
         CREATE TABLE IF NOT EXISTS study_room_feature_log (
