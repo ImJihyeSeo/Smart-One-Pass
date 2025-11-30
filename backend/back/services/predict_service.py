@@ -57,18 +57,75 @@ def get_status_and_color(remain: int, total: int):
     else:
         return "혼잡", "#f44336" # 빨강
 
+# def predict_library_seats(target_dt: datetime):
+#     """
+#     Prophet 모델을 사용하여 4개 열람실의 잔여석을 예측
+#     """
+#     results = []
+
+#     # 예측용 DataFrame 생성 (Prophet은 ds, cap 컬럼이 필요함)
+#     future = pd.DataFrame({'ds': [target_dt]})
+    
+#     for room_name, model in models.items():
+#         try:
+#             # 1. Cap(상한선) 설정 (Logistic Growth 학습 시 필수)
+#             current_cap = ROOM_CAPACITY.get(room_name, 100)
+#             future['cap'] = current_cap
+#             future['floor'] = 0
+            
+#             # 2. 예측 수행
+#             forecast = model.predict(future)
+            
+#             # 3. 결과 추출 (yhat이 예측값)
+#             pred_float = forecast.iloc[0]['yhat']
+            
+#             # 4. 정수 변환 및 범위 보정 (0 ~ Max 사이로 가두기)
+#             pred_remain = int(round(pred_float))
+#             if pred_remain < 0: pred_remain = 0
+#             if pred_remain > current_cap: pred_remain = current_cap
+            
+#             # 5. 혼잡도 라벨링
+#             status, color = get_status_and_color(pred_remain, current_cap)
+            
+#             # 6. 결과 리스트 추가
+#             results.append({
+#                 "name": room_name,         # 열람실명 -> name
+#                 "total": str(current_cap), # 전체좌석 -> total
+#                 "remain": str(pred_remain),# 예측잔여석 -> remain
+#                 "status": status,          # 혼잡도 -> status
+#                 "color": color             # 색상 -> color
+#             })
+            
+#         except Exception as e:
+#             print(f"❌ 예측 에러 ({room_name}): {str(e)}")
+#             # 에러 시 기본값 반환
+#             results.append({
+#                 "name": room_name,
+#                 "total": str(ROOM_CAPACITY.get(room_name, 0)),
+#                 "remain": "Error",
+#                 "status": "알수없음",
+#                 "color": "#9e9e9e"
+#             })
+
+#     return results
+
+
 def predict_library_seats(target_dt: datetime):
     """
-    Prophet 모델을 사용하여 4개 열람실의 잔여석을 예측
+    Prophet 모델을 사용하여 4개 열람실의 잔여석을 예측하고, 터미널에 로그를 출력합니다.
     """
     results = []
 
-    # 예측용 DataFrame 생성 (Prophet은 ds, cap 컬럼이 필요함)
+    # 예측용 DataFrame 생성
     future = pd.DataFrame({'ds': [target_dt]})
     
+    # 터미널 출력용 헤더 (구분선)
+    print(f"\n🔮 [예측 요청] 타겟 시간: {target_dt}")
+    print("-" * 50)
+
     for room_name, model in models.items():
         try:
-            # 1. Cap(상한선) 설정 (Logistic Growth 학습 시 필수)
+            # 1. Cap(상한선) 설정
             current_cap = ROOM_CAPACITY.get(room_name, 100)
             future['cap'] = current_cap
             future['floor'] = 0
@@ -76,10 +133,10 @@ def predict_library_seats(target_dt: datetime):
             # 2. 예측 수행
             forecast = model.predict(future)
             
-            # 3. 결과 추출 (yhat이 예측값)
+            # 3. 결과 추출
             pred_float = forecast.iloc[0]['yhat']
             
-            # 4. 정수 변환 및 범위 보정 (0 ~ Max 사이로 가두기)
+            # 4. 정수 변환 및 범위 보정
             pred_remain = int(round(pred_float))
             if pred_remain < 0: pred_remain = 0
             if pred_remain > current_cap: pred_remain = current_cap
@@ -87,18 +144,20 @@ def predict_library_seats(target_dt: datetime):
             # 5. 혼잡도 라벨링
             status, color = get_status_and_color(pred_remain, current_cap)
             
+            # ✅ [추가된 부분] 터미널에 예측값 출력
+            print(f"🏫 {room_name.ljust(15)} | 잔여: {str(pred_remain).rjust(3)}석 / {current_cap}석 | 상태: {status}")
+
             # 6. 결과 리스트 추가
             results.append({
-                "name": room_name,         # 열람실명 -> name
-                "total": str(current_cap), # 전체좌석 -> total
-                "remain": str(pred_remain),# 예측잔여석 -> remain
-                "status": status,          # 혼잡도 -> status
-                "color": color             # 색상 -> color
+                "name": room_name,
+                "total": str(current_cap),
+                "remain": str(pred_remain),
+                "status": status,
+                "color": color
             })
             
         except Exception as e:
             print(f"❌ 예측 에러 ({room_name}): {str(e)}")
-            # 에러 시 기본값 반환
             results.append({
                 "name": room_name,
                 "total": str(ROOM_CAPACITY.get(room_name, 0)),
@@ -106,5 +165,6 @@ def predict_library_seats(target_dt: datetime):
                 "status": "알수없음",
                 "color": "#9e9e9e"
             })
-
+            
+    print("-" * 50 + "\n") # 하단 구분선
     return results
