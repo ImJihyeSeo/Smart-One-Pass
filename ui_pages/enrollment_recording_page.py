@@ -244,7 +244,7 @@ class EnrollmentRecordingPage(BasePage):
 
             if self.accum_samples_count_current_instruction < required_samples:
                 # 🚨 [수정] 가이드 안에 있고 + AI가 특징을 뽑았으면(emb) -> 저장
-                if face_in_guide and emb is not None:
+                if face_in_guide and emb is not None and is_live:
                     self.set_overlay_opacity(0)
                     if self.guide_animation.state() != QAbstractAnimation.Running:
                         self.guide_animation.start()
