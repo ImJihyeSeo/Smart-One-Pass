@@ -206,7 +206,7 @@ class EnrollmentRecordingPage(BasePage):
 
         # 🚨 [수정] 1. AI 모델로 얼굴 특징 및 정보 추출 (가장 중요한 부분)
         # detect_faces 없이 여기서 나온 face_obj를 바로 사용합니다.
-        emb, face_obj = self.face_rec.embed_biggest(frame)
+        emb, face_obj, is_live = self.face_rec.embed_biggest(frame)
 
         # 🚨 [수정] 2. 가이드 영역 내 얼굴 확인 로직 단순화
         face_in_guide = False
