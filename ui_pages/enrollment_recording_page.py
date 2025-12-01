@@ -53,6 +53,10 @@ class EnrollmentRecordingPage(BasePage):
         self.set_header_spacing(10)
         self.state = "IDLE"
         self.last_state_change_time = time.time()
+
+        # 🚨 [추가] 마지막으로 샘플을 찍은 시간을 기록할 변수
+        self.last_sample_time = 0 
+        self.sample_interval = 1  # 0.5초마다 한 장씩 찍기 (속도 조절은 여기서!)
        
         # 샘플 수 계산
         total_instructions = sum(len(step['instructions']) for step in ENROLLMENT_STEPS)
@@ -244,17 +248,32 @@ class EnrollmentRecordingPage(BasePage):
 
             if self.accum_samples_count_current_instruction < required_samples:
                 # 🚨 [수정] 가이드 안에 있고 + AI가 특징을 뽑았으면(emb) -> 저장
+
+                # 현재 시간 확인
+                current_time = time.time()
+
                 if face_in_guide and emb is not None:
-                    self.set_overlay_opacity(0)
-                    if self.guide_animation.state() != QAbstractAnimation.Running:
-                        self.guide_animation.start()
 
-                    # 샘플 저장 및 전송
-                    _, self.accum_samples_count = self.face_rec.accumulate_sample(frame)
-                    self.accum_samples_count_current_instruction += 1
+                    # 🚨 [추가] 마지막 촬영 후 0.5초가 지났는지 확인
+                    if current_time - self.last_sample_time >= self.sample_interval:
+                        self.last_sample_time = current_time  # 촬영 시간 갱신
 
-                    self.instruction_label.setText(f"{current_instruction}\n({self.accum_samples_count_current_instruction}/{required_samples})")
-                    self.state = "WAIT_INSTRUCTION_TIME"
+                        self.set_overlay_opacity(0)
+                        if self.guide_animation.state() != QAbstractAnimation.Running:
+                            self.guide_animation.start()
+
+                        # 샘플 저장 및 전송
+                        _, self.accum_samples_count = self.face_rec.accumulate_sample(frame)
+                        self.accum_samples_count_current_instruction += 1
+
+                        self.instruction_label.setText(f"{current_instruction}\n({self.accum_samples_count_current_instruction}/{required_samples})")
+                        self.state = "WAIT_INSTRUCTION_TIME"
+                    else:
+                        # 0.5초가 아직 안 지났으면, 화면은 정상이지만 저장은 안 함 (그냥 통과)
+                        # 사용자에게는 "잘 하고 있어요" 느낌만 줌
+                        self.set_overlay_opacity(0)
+                        self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: transparent; border-radius: {self.BORDER_RADIUS}px; }}")
+                        pass
                 else:
                     self.set_overlay_opacity(40)
                     if self.guide_animation.state() == QAbstractAnimation.Running:
