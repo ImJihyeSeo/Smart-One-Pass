@@ -1,8 +1,7 @@
-# utils/helper_functions.py
-
 from typing import List, Dict, Any, Optional, Tuple, Union
-
+from fastapi.responses import JSONResponse  # 👈 [1] 이 줄이 꼭 추가되어야 합니다!
 # Note: sqlite3.Row 타입을 사용하기 위해 sqlite3 모듈을 import합니다.
+from datetime import date, datetime, time  # ✅ [수정] 날짜 타입 확인을 위해 추가
 
 # --- 1. 공통 오류 응답 포장 (error_response) ---
 def error_response(
@@ -36,7 +35,8 @@ def success_response(
     message: str, 
     status_code: int, 
     data: Optional[Dict[str, Any]] = None
-) -> Tuple[Dict[str, Any], int]:
+) -> JSONResponse:
+# ) -> Tuple[Dict[str, Any], int]:
     
     # 1. JSON 본문(Body)의 기본 구조를 만듭니다.
     response_body = {
@@ -53,29 +53,68 @@ def success_response(
         
     # 3. 최종 포장된 JSON 본문(딕셔너리)과 HTTP 상태 코드를 튜플로 반환합니다.
     # 이 튜플은 FastAPI 핸들러의 'return' 문에서 사용됩니다.
-    return response_body, status_code
+    # return response_body, status_code
+    return JSONResponse(content=response_body, status_code=status_code)
 
 # --- 3. DB Row 객체를 JSON 리스트로 번역 (format_db_rows_to_json) ---
+# def format_db_rows_to_json(
+#     db_rows: List[Dict[str, Any]]
+# ) -> List[Dict[str, Any]]:
+#     """
+#     SQLite의 Row 객체 리스트를 파이썬의 딕셔너리 리스트 (최종 JSON 형태)로 변환합니다.
+#     """
+    
+#     # 1. DB 결과가 None이거나 비어있으면 빈 리스트 []를 반환하여 안전하게 처리합니다.
+#     if not db_rows:
+#         return []
+    
+#     # json_list = []
+#     # 2. psycopg2의 RealDictRow 객체를 순수 dict로 변환
+#     # (FastAPI가 RealDictRow도 잘 처리하지만, dict로 명시적 변환하는 것이 안전합니다.)
+#     json_list = [dict(row) for row in db_rows]
+    
+#     # 2. 각 행(Row)을 반복하며 dict() 함수로 딕셔너리 리스트를 만듭니다.
+#     # for row in db_rows:
+#     #     # sqlite3.Row 객체는 dict()으로 변환되어야 클라이언트가 원하는 JSON 형태가 됩니다.
+#     #     json_list.append(row)
+        
+#     # json_list = [row for row in db_rows]
+    
+#     return json_list
+
 def format_db_rows_to_json(
-    db_rows: List[Dict[str, Any]]
+    db_rows: List[Any]
 ) -> List[Dict[str, Any]]:
     """
-    SQLite의 Row 객체 리스트를 파이썬의 딕셔너리 리스트 (최종 JSON 형태)로 변환합니다.
-    """
+    DB 조회 결과(Row 객체 리스트)를 일반 딕셔너리 리스트로 변환합니다.
+    # """
+    # if not db_rows:
+    #     return []
     
-    # 1. DB 결과가 None이거나 비어있으면 빈 리스트 []를 반환하여 안전하게 처리합니다.
-    if not db_rows:
-        return []
-    
+    # # RealDictRow 객체를 순수 dict로 변환
+    # json_list = [dict(row) for row in db_rows]
+    # return json_list
     json_list = []
     
-    # 2. 각 행(Row)을 반복하며 dict() 함수로 딕셔너리 리스트를 만듭니다.
-    # for row in db_rows:
-    #     # sqlite3.Row 객체는 dict()으로 변환되어야 클라이언트가 원하는 JSON 형태가 됩니다.
-    #     json_list.append(row)
+    if not db_rows:
+        return []
+
+    for row in db_rows:
+        # 1. Row 객체를 딕셔너리로 변환
+        row_dict = dict(row)
         
-    json_list = [row for row in db_rows]
-    
+        # 2. 딕셔너리 내부 값을 검사하여 날짜 타입이면 문자열로 변환
+        for key, value in row_dict.items():
+            # 날짜(date) 또는 일시(datetime) 타입인 경우
+            if isinstance(value, (date, datetime)):
+                row_dict[key] = str(value) # "2025-11-28" 형태로 변환
+            
+            # 시간(time) 타입인 경우
+            elif isinstance(value, time):
+                row_dict[key] = str(value) # "14:00:00" 형태로 변환
+                
+        json_list.append(row_dict)
+        
     return json_list
 
 # JSON 필수값 누락 확인

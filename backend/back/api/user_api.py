@@ -1,79 +1,18 @@
 # api/user_api.py (회원 정보 수정 및 삭제, 조회)
 from fastapi import APIRouter, HTTPException, status, Query
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 # from database import get_db_connection, initialize_db
 from ..services.core_service import check_student_exists, execute_delete_students, get_student_ID_by_face, check_access_of_student, execute_insert_student, update_student, process_access_record, create_reservation, check_time, get_access_records, get_seat_information, check_time_overlap, get_reservation_status, check_student_inside, prev_check_student
 from ..utils.helper_functions import error_response, success_response, format_db_rows_to_json, validate_input
 # services 및 utils 폴더에서 필요한 함수들을 모두 import 가정
 
+import numpy as np
+from pydantic import BaseModel
+
+
 router = APIRouter()
 
-
-# --- 회원 정보 등록 핸들러 (POST /user/register) ---
-# @router.post("/register", status_code=status.HTTP_201_CREATED)
-# async def register_user_handler(data: Dict[str, Any]):
-#     """
-#     새로운 학생 회원 정보를 등록합니다.
-#     """
-    
-#     # 1. JSON 필수값 누락 확인 (400 Bad Request 방어)
-#     # 회원 등록 시 sid는 필수이며, face 또는 card 중 하나는 반드시 있어야 합니다.
-#     REQUIRED_KEYS = ['sid']
-#     validation_result = validate_input(data, REQUIRED_KEYS)
-    
-#     # sid가 없거나, sid는 있지만 face와 card가 모두 누락된 경우
-#     if validation_result is not True or (not data.get('face') and not data.get('card')):
-        
-#         # validate_input 실패 시의 상세 오류 메시지를 사용합니다.
-#         if validation_result is not True:
-#             _, error_detail = validation_result
-#         else:
-#             # face와 card가 모두 누락된 경우의 오류 메시지 (별도 정의)
-#             error_detail = {"error_code": "EMPTY_DATA", "message": "학번과 함께 얼굴 데이터 또는 카드 ID 중 하나는 필수입니다."}
-            
-#         raise HTTPException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail=error_response(
-#                 error_code=error_detail['error_code'], 
-#                 message=error_detail['message']
-#             )
-#         )
-    
-#     sid = data.get('sid')
-#     face_data = data.get('face')
-#     card_id = data.get('card')
-    
-#     # 2. 회원 존재 중복 확인 (409 Conflict 방어)
-#     if check_student_exists(sid):
-#         raise HTTPException(
-#             status_code=status.HTTP_409_CONFLICT,
-#             detail=error_response(
-#                 error_code="ALREADY_EXIST_USER",
-#                 message=f"학번 {sid}는 이미 등록된 회원입니다."
-#             )
-#         )
-
-#     # 3. 회원 기록 최종 저장 (INSERT 트랜잭션 실행)
-#     # execute_insert_student 함수는 face_data가 bytes 타입이라고 가정합니다.
-#     success, error_details = execute_insert_student(sid, face_data, card_id)
-    
-#     if not success:
-#         # DB 저장 중 오류 발생 시 (500 Internal Server Error)
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail=error_response(
-#                 error_code="DB_ERROR",
-#                 message=f"회원 정보 등록 중 내부 데이터베이스 오류가 발생했습니다. 상세: {error_details.get('message', '알 수 없음')}"
-#             )
-#         )
-        
-#     # 4. 성공 응답 반환 (201 Created)
-#     return success_response(
-#         message="USER_REGISTER_SUCCESS",
-#         status_code=status.HTTP_201_CREATED,
-#         data={"sid": sid} # 생성된 리소스의 식별자를 포함하여 반환
-#     )
 
 import base64 # 🚨 추가: face 데이터를 bytes로 변환하기 위해 필요
 
@@ -384,4 +323,113 @@ async def check_existence_handler(data: Dict[str, Any]):
             message="USER_AVAILABLE_FOR_ENROLLMENT",
             status_code=status.HTTP_200_OK,
             data={"sid": sid, "exists": False}
+        )
+    
+
+
+# ==========================================
+# 1. 데이터 모델 (클라이언트가 보낼 데이터 양식)
+# ==========================================
+
+# /enroll/sample 요청 받을 때 쓸 양식
+class EnrollSampleRequest(BaseModel):
+    sid: str              # 학번
+    embedding: List[float] # 얼굴 벡터 (숫자 512개 리스트)
+
+# /enroll/finish 요청 받을 때 쓸 양식
+class EnrollFinishRequest(BaseModel):
+    sid: str              # 학번
+    name: str             # 이름
+
+# ==========================================
+# 2. 가짜 DB (실제로는 PostgreSQL/MySQL 사용 권장)
+# ==========================================
+
+# (1) 임시 보관함: 샘플들을 잠시 모아두는 곳
+# 구조: { "20231234": [[0.1, 0.2...], [0.3, 0.4...]] }
+enrollment_sessions: Dict[str, List[List[float]]] = {}
+
+
+
+# [API 1] 샘플 수집 (accumulate_sample 대응)
+@router.post("/enroll/sample")
+async def enroll_sample_handler(data: EnrollSampleRequest):
+    """
+    클라이언트로부터 얼굴 벡터 샘플을 받아 서버 메모리에 임시 저장합니다.
+    """
+    sid = data.sid
+    vector = data.embedding
+
+    # 1. 해당 학번의 세션이 없으면 생성
+    if sid not in enrollment_sessions:
+        enrollment_sessions[sid] = []
+    
+    # 2. 벡터 리스트에 추가
+    enrollment_sessions[sid].append(vector)
+    
+    count = len(enrollment_sessions[sid])
+    print(f"📸 [Enroll] {sid}: 샘플 {count}개 확보")
+    
+    return success_response(
+        message="SAMPLE_COLLECTED",
+        status_code=200,
+        data={"count": count}
+    )
+
+# [API 2] 등록 완료 (finish_enrollment 대응)
+@router.post("/enroll/finish")
+async def enroll_finish_handler(data: EnrollFinishRequest):
+    """
+    모인 샘플들의 평균을 계산하여 '최종 얼굴 데이터'를 만든 뒤,
+    DB의 students 테이블에 저장(INSERT 또는 UPDATE)합니다.
+    """
+    sid = data.sid
+    name = data.name
+
+    # 1. 저장된 샘플이 있는지 확인
+    if sid not in enrollment_sessions or not enrollment_sessions[sid]:
+        raise HTTPException(
+            status_code=400, 
+            detail=error_response("NO_SAMPLES", "수집된 얼굴 샘플이 없습니다.")
+        )
+
+    try:
+        # 2. [핵심 로직] 평균 벡터 계산 (Numpy 사용)
+        vectors = np.array(enrollment_sessions[sid], dtype=np.float32)
+        mean_vector = np.mean(vectors, axis=0)
+        
+        # 3. 정규화 (L2 Norm) - 얼굴 인식 정확도를 위해 필수
+        norm = np.linalg.norm(mean_vector)
+        if norm > 0:
+            mean_vector = mean_vector / norm
+            
+        # 4. 바이트 변환 (PostgreSQL BYTEA 타입에 저장하기 위함)
+        # float32 배열을 bytes로 직렬화합니다.
+        final_face_bytes = mean_vector.tobytes()
+
+        # 5. DB 저장 (이미 회원이 있으면 Update, 없으면 Insert)
+        if check_student_exists(sid):
+            # 기존 회원이면 얼굴 정보만 업데이트
+            success, err = update_student(sid, {"face": final_face_bytes})
+        else:
+            # 신규 회원이면 새로 등록
+            success, err = execute_insert_student(sid, name, final_face_bytes)
+
+        if not success:
+            raise HTTPException(status_code=500, detail=err)
+
+        # 6. 메모리 정리 (세션 삭제)
+        del enrollment_sessions[sid]
+        
+        return success_response(
+            message="ENROLLMENT_FINISHED",
+            status_code=200,
+            data={"sid": sid, "name": name}
+        )
+
+    except Exception as e:
+        print(f"Enrollment Finish Error: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=error_response("SERVER_ERROR", str(e))
         )

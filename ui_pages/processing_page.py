@@ -15,6 +15,21 @@ from .base_page import BasePage
 from faceid.face_recognizer import FaceRecognizer, rrect_xyxy
 
 
+# 백엔드 API 연동
+import sys
+import os
+import requests
+
+# 🚨 추가: 세션 매니저 연동 (상위 폴더 접근)
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+try:
+    from session_manager import UserSession
+except ImportError:
+    print("Warning: session_manager not found")
+
+# 🚨 추가: API 기본 주소 (main.py 설정에 따라 다를 수 있음)
+API_BASE_URL = "http://34.213.241.165:8000"
+
 '''
 웹캠 화면 표시하고, 얼굴 인식 과정을 시각적으로 처리해 결과를 result_page로 넘기는 페이지
 '''
@@ -235,32 +250,103 @@ class ProcessingPage(BasePage):
                       .format(stats["mean_ms"], stats["p95_ms"], stats["count"]))
                 # ========================
 
+                # 기존 코드 주석 처리
                 # 얼굴 식별 - AI 모델
-                success, name, similarity = self.face_rec.identify_face(emb)
+                # success, name, similarity = self.face_rec.identify_face(emb)
                 
-                # result_page로 결과 데이터 전달 (DB 연동 필요)
-                user_data = None
+                # 백엔드 API 연동
                 
+                success, found_id, similarity = self.face_rec.identify_face(emb)
+                # -------------------------------------------------------
+                # [API 및 세션 연동] 얼굴 인식 결과 처리
+                # -------------------------------------------------------
+                
+                # 1. 인식된 사용자 정보 가져오기 (갤러리 조회)
+                ident = self.face_rec.gallery.get(found_id)
+                if ident:
+                    student_id = ident.student_id # 혹은 found_id 그대로 사용
+                    user_name = ident.name
+                else:
+                    # 인식은 됐는데 갤러리에 키가 없는 경우 (거의 없겠지만 방어 코드)
+                    student_id = "99999999"
+                    user_name = "Unknown"
+                
+                user_data = {"name": user_name, "student_id": student_id}
+    
                 if success:
-                    # 실제로는 self.face_rec.gallery에서 student_id 등을 조회해야 함
-                    # 현재는 face_recognizer.py에서 name을 key로 사용
-                    ident = self.face_rec.gallery.get(name)
-                    if ident:
-                        user_data = {"name": ident.name, "student_id": ident.student_id} 
+                    # [상황 B] 좌석 예약 모드: 세션 로그인 후 예약 페이지로 이동
+                    if self.mode == "auth_reservation":
+                        try:
+                            # 세션에 학번 저장 (다음 페이지에서 API 호출 시 사용)
+                            UserSession.instance().login(user_id=student_id, name=user_name)
+                            print(f"[Auth] Logged in: {user_name} ({student_id})")
+                        except Exception as e:
+                            print(f"Session Error: {e}")
+                            
+                        # 예약 페이지로 이동
+                        self.switch_callback("reservation", user_data)
+                        return
+
+                    # [상황 A] 출입 인증 모드 (기본): 서버에 출입 기록 전송
                     else:
-                        user_data = {"name": name, "student_id": "99999999"} # 더미 학번
+                        try:
+                            # 🚨 API 호출: POST /access/record
+                            payload = {"sid": student_id}
+                            response = requests.post(f"{API_BASE_URL}/access/record", json=payload)
+                            
+                            # if response.status_code == 201:
+                            #     print(f"[Access] Success: {response.json().get('message')}")
+                            # else:
+                            #     print(f"[Access] Failed: {response.text}")
+                            
+                            if response.status_code == 200 or response.status_code == 201:
+                                res_json = response.json()
+                                
+                                # 🚨 [추가] 서버가 리스트로 보냈을 경우, 첫 번째 요소만 꺼내기
+                                if isinstance(res_json, list):
+                                    res_json = res_json[0]
+                                    
+                                # 이제 res_json은 항상 딕셔너리({})가 됩니다.
+                                if res_json.get("success"):
+                                    print(f"✅ [Access] Success: {res_json.get('message')}")
+                                    # (성공 처리 로직...)
+                                else:
+                                    print(f"❌ [Access] Failed: {res_json}")
+                            else:
+                                print(f"❌ [Access] HTTP Error: {response.status_code}")
+                                
+                        except Exception as e:
+                            print(f"Network Error during access record: {e}")
+                            # 네트워크 오류가 나더라도 UI 흐름은 끊지 않고 결과 페이지로 이동 (선택 사항)
+
+                        # 결과 페이지로 이동
+                        result_data = (success, self.retries, user_name)
+                        self.switch_callback("result", result_data, mode=self.mode)
+                # 기존의 코드 주석 처리
+                # # result_page로 결과 데이터 전달 (DB 연동 필요)
+                # user_data = None
                 
-                if success and self.mode == "auth_reservation":
-                    # print(f"DEBUG: Face recognition success in reservation mode. Skipping ResultPage.")
-                    # ReservationPage로 즉시 전환 (data에 학생 정보 전달)
-                    self.switch_callback("reservation", user_data)
-                    return
+                # if success:
+                #     # 실제로는 self.face_rec.gallery에서 student_id 등을 조회해야 함
+                #     # 현재는 face_recognizer.py에서 name을 key로 사용
+                #     ident = self.face_rec.gallery.get(name)
+                #     if ident:
+                #         user_data = {"name": ident.name, "student_id": ident.student_id} 
+                #     else:
+                #         user_data = {"name": name, "student_id": "99999999"} # 더미 학번
+                
+                # if success and self.mode == "auth_reservation":
+                #     # print(f"DEBUG: Face recognition success in reservation mode. Skipping ResultPage.")
+                #     # ReservationPage로 즉시 전환 (data에 학생 정보 전달)
+                #     self.switch_callback("reservation", user_data)
+                #     return
+                
                 
                 # 예약 모드 실패 시: 4개 인자 전달
                 if self.mode == "auth_reservation":
-                    result_data = (success, self.retries, name, user_data)
+                    result_data = (success, self.retries, found_id, user_data)
                 else:   # 출입 인증 모드(기본값) 및 기타 모드: 3개 인자 전달
-                    result_data = (success, self.retries, name) 
+                    result_data = (success, self.retries, found_id) 
                 
                 self.switch_callback("result", result_data, mode=self.mode)
         

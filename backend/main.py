@@ -2,16 +2,26 @@ import uvicorn
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from database import initialize_db # database.py에 정의된 초기화 함수 임포트
+import pandas as pd
+import os
+
+from collector import collect_update
 
 
-# 이제 os.environ.get("DATABASE_URL") 등을 통해 접근 가능합니다.
-# (나머지 FastAPI 코드는 그대로 유지)
+from apscheduler.schedulers.background import BackgroundScheduler # 👈 추가
+from back.services.core_service import execute_auto_return
+from back.api import seat_api
+
+
+# 1. 현재 파일(main.py)이 있는 폴더 경로를 찾습니다.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 # 💡 API 라우터 임포트 (back.api 폴더에서 가져온다고 가정)
 from back.api.user_api import router as user_router 
 from back.api.access_api import router as access_router
 from back.api.seat_api import router as seat_router 
+from back.api.predict_api import router as predict_router 
 
 
 # 1. Lifespan Context Manager 정의 (on_event 대체)
@@ -25,14 +35,25 @@ async def lifespan_handler(app: FastAPI):
     print("INFO: [STARTUP] 데이터베이스 초기화(스키마 검증) 시작...")
     initialize_db() # 💡 DB 초기화 함수 호출
     print("INFO: [STARTUP] 데이터베이스 초기화 완료.")
+
     
-    # yield: 이 시점에서 서버가 외부 요청을 받기 시작합니다.
+    # 스케줄러 생성 및 작업 추가
+    scheduler = BackgroundScheduler()
+
+    # 'execute_auto_return' 함수를 1분(minutes=1)마다 실행
+    scheduler.add_job(execute_auto_return, 'interval', minutes=1)
+
+    # 2. 👇 [추가] 좌석 정보 수집 (collector)
+    # trigger='cron', minute='0,30' -> 매 시간 0분과 30분에 실행 (예: 12:00, 12:30, 13:00...)
+    scheduler.add_job(collect_update, 'cron', minute='0,30')
+    scheduler.start()
+    
     yield 
     
     # [SHUTDOWN 로직: 서버 종료 시]
     print("INFO: [SHUTDOWN] 애플리케이션 종료 작업 실행...")
     # (여기에 DB 연결 풀 해제 등 종료 시 필요한 코드를 넣을 수 있습니다.)
-
+    scheduler.shutdown()
 
 # 2. FastAPI 인스턴스 생성 및 lifespan 연결
 app = FastAPI(
@@ -46,8 +67,7 @@ app = FastAPI(
 app.include_router(user_router, prefix="/user", tags=["User Management"])
 app.include_router(access_router, prefix="/access", tags=["Access"])
 app.include_router(seat_router, prefix="/seat", tags=["Seat Reservation"])
-
-
+app.include_router(predict_router, prefix="/predict", tags=["Seat Prediction"])
 # 4. Uvicorn 서버 실행 블록
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

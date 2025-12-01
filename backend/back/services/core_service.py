@@ -10,8 +10,11 @@ import psycopg2
 import psycopg2.extras
 import os
 from dotenv import load_dotenv
+import numpy as np # 🚨 추가 필요 (pip install numpy)
 
 load_dotenv()
+# ✅ [추가] 전역 KST 상수 정의
+KST = timezone(timedelta(hours=9))
 
 # 🚨 import 경로는 당신의 실제 프로젝트 구조에 맞게 수정하세요.
 from database import get_db_connection 
@@ -121,38 +124,84 @@ def get_student_ID_by_face(face: bytes) -> Union[str, Tuple[bool, Dict[str, str]
     cursor = conn.cursor()
     ERROR_NOT_FOUND = {"error_code": "NOT_FOUND", "message": "일치하는 회원 정보를 찾을 수 없습니다."}
     
+# 🚨 유사도 기준값 (프론트엔드의 THRESHOLD와 비슷하게 설정, 예: 0.35~0.5)
+    # 값이 클수록 엄격하게 검사합니다. 테스트하며 조정하세요.
+    SIMILARITY_THRESHOLD = 0.29 
+    
     try:
-        # [Step 2-A] 모든 등록된 sid와 face 데이터를 가져옵니다.
-        # 이 단계는 DB에서 '검증할 리스트'를 가져오는 역할을 합니다.
+        # 1. 입력된 bytes를 numpy 배열로 변환 (float32)
+        target_emb = np.frombuffer(face, dtype=np.float32)
+        
+        # 2. DB에서 모든 회원의 얼굴 데이터 가져오기
         cursor.execute("SELECT sid, face FROM students WHERE face IS NOT NULL")
-        
-        all_students = cursor.fetchall() # 모든 결과를 리스트 형태로 가져옵니다.
+        all_students = cursor.fetchall()
 
-        # [Step 2-B] 파이썬 내부에서 얼굴 비교 로직 실행 (가장 복잡한 부분)
-        # 실제 얼굴 인식 모델을 사용하여 등록된 모든 데이터와 비교합니다.
-        
+        max_score = -1.0
         found_sid = None
-        for student_row in all_students:
-            known_face_data = student_row['face']
+
+        for row in all_students:
+            db_face_bytes = row['face']
             
-            # ************************************🚨 이 함수가 실제 AI 모델을 호출하거나 복잡한 벡터 비교를 수행한다고 가정
-            # if compare_face_data(known_face_data, face_data): 여기는 나중에 모델이 들어오면 다시 구현 **************************************** 
-            if known_face_data == face: # 단순 비교로 대체 (실제로는 복잡한 모델)
-                found_sid = student_row['sid']
-                break # 일치하는 학생을 찾았으므로 루프를 중단합니다.
+            # DB 데이터를 numpy 배열로 변환
+            db_emb = np.frombuffer(db_face_bytes, dtype=np.float32)
+            
+            # 3. 코사인 유사도 계산 (Dot Product)
+            # (이미 정규화(L2 Norm)된 상태로 저장했다고 가정)
+            score = np.dot(target_emb, db_emb)
+            
+            # 가장 높은 점수 찾기
+            if score > max_score:
+                max_score = score
+                found_sid = row['sid']
 
-        # [Step 2-C] 결과 반환
-        if found_sid:
-            return found_sid # 일치하는 sid 문자열 반환
+        print(f"🔍 [Face Auth] Max Score: {max_score}, User: {found_sid}")
+
+        # 4. 임계z값(Threshold) 넘었는지 확인
+        if found_sid and max_score >= SIMILARITY_THRESHOLD:
+            return found_sid # 인증 성공
         else:
-            return False, ERROR_NOT_FOUND # 일치하는 회원이 없음 (404 방어)
+            return False, ERROR_NOT_FOUND # 실패
 
-    except psycopg2.Error as e:
-        print(f"Face check DB Error: {e}")
-        return False, {"error_code": "DB_EXECUTION_ERROR", "message": "얼굴 검색 중 DB 오류 발생."}
+    except Exception as e:
+        print(f"Face check Logic Error: {e}")
+        return False, {"error_code": "LOGIC_ERROR", "message": f"얼굴 비교 중 오류: {str(e)}"}
         
     finally:
         conn.close()
+
+    # 기존 코드 주석 처리
+    # try:
+    #     # [Step 2-A] 모든 등록된 sid와 face 데이터를 가져옵니다.
+    #     # 이 단계는 DB에서 '검증할 리스트'를 가져오는 역할을 합니다.
+    #     cursor.execute("SELECT sid, face FROM students WHERE face IS NOT NULL")
+        
+    #     all_students = cursor.fetchall() # 모든 결과를 리스트 형태로 가져옵니다.
+
+    #     # [Step 2-B] 파이썬 내부에서 얼굴 비교 로직 실행 (가장 복잡한 부분)
+    #     # 실제 얼굴 인식 모델을 사용하여 등록된 모든 데이터와 비교합니다.
+        
+    #     found_sid = None
+    #     for student_row in all_students:
+    #         known_face_data = student_row['face']
+            
+    #         # ************************************🚨 이 함수가 실제 AI 모델을 호출하거나 복잡한 벡터 비교를 수행한다고 가정
+    #         # if compare_face_data(known_face_data, face_data): 여기는 나중에 모델이 들어오면 다시 구현 **************************************** 
+    #         if known_face_data == face: # 단순 비교로 대체 (실제로는 복잡한 모델)
+    #             found_sid = student_row['sid']
+    #             break # 일치하는 학생을 찾았으므로 루프를 중단합니다.
+
+    #     # [Step 2-C] 결과 반환
+    #     if found_sid:
+    #         return found_sid # 일치하는 sid 문자열 반환
+    #     else:
+    #         return False, ERROR_NOT_FOUND # 일치하는 회원이 없음 (404 방어)
+
+    # except psycopg2.Error as e:
+    #     print(f"Face check DB Error: {e}")
+    #     return False, {"error_code": "DB_EXECUTION_ERROR", "message": "얼굴 검색 중 DB 오류 발생."}
+        
+    # finally:
+    #     conn.close()
 
 # 상태 판단 (최근 기록에 EXIT이 NULL인지 확인)
 
@@ -403,7 +452,7 @@ def process_access_record(
     cursor = conn.cursor()
     ERROR_DB = {"error_code": "DB_ERROR", "message": "출입 기록 저장 중 데이터베이스 오류가 발생했습니다."}
     # UTC 사용 (권장)
-    current_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S') 
+    current_time = datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S') 
     try:
         if action_type == "IN":
             # [Case 1] 입장 처리: 새로운 기록을 INSERT 합니다.
@@ -552,10 +601,15 @@ def check_time(
     #     return False, ERROR_WRONG_TIME
 
     # 4. [규칙 B] 예약 시간이 운영 시간 안에 있는지 확인
-    if start_dt < open_time & start_dt > close_time:
+    if start_dt < open_time or start_dt > close_time:
         ERROR_WRONG_TIME["message"] = f"운영 시간({open_time.strftime(time_format)}~{close_time.strftime(time_format)}) 외의 시간입니다."
         return False, ERROR_WRONG_TIME
         
+    # [수정 후 (올바른 코드)]
+    # & 대신 or를 사용해야 합니다. ("문 여는 시간 전이거나, 문 닫는 시간 후라면")
+    # if start_dt < open_time or start_dt > close_time:
+    #     return False, {"error_code": "OPERATING_HOURS_VIOLATION", "message": "지금은 운영 시간이 아닙니다."}
+    
     # 5. [규칙 C] 최소/최대 예약 시간 (예: 최소 30분, 최대 4시간) 확인
     
     # # 임시 날짜 객체 생성 (시간 차이 계산 용도)
@@ -907,7 +961,7 @@ def get_reservation_status(
     # where_clauses.append("end_time > CURRENT_TIME") # 예약이 아직 끝나지 않았는지 확인 (당일 한정 문제)
 
     # where_clauses.append("end_time > CURRENT_TIME AND date = CURRENT_DATE")
-    where_clauses.append("date + start_time <= NOW()") # 예약 시작 시간이 현재 시간보다 빠르거나 같고
+    # where_clauses.append("date + start_time <= NOW()") # 예약 시작 시간이 현재 시간보다 빠르거나 같고
     # where_clauses.append("date + end_time > NOW()")   # 예약 종료 시간이 현재 시간보다 늦고
     where_clauses.append("return_time IS NULL")
     
@@ -1026,16 +1080,31 @@ def check_extension_validity(
     try:
         # 현재 UTC 시간을 기준으로 비교합니다.
         # DB 저장 시 타임존이 없어도 UTC임을 가정하고 처리합니다.
-        now_utc = datetime.now(timezone.utc) 
+        now_kst = datetime.now(KST) 
+
+
+        FULL_FORMAT = '%Y-%m-%d %H:%M:%S'
+        # # 1. 예약 시간을 datetime 객체로 변환
+        # start_dt = datetime.strptime(reservation_info['start_time'], TIME_FORMAT).replace(tzinfo=timezone.utc)
+        # end_dt = datetime.strptime(reservation_info['end_time'], TIME_FORMAT).replace(tzinfo=timezone.utc)
+        start_val = reservation_info['start_time']
+        end_val = reservation_info['end_time']
         
-        # 1. 예약 시간을 datetime 객체로 변환
-        start_dt = datetime.strptime(reservation_info['start_time'], TIME_FORMAT).replace(tzinfo=timezone.utc)
-        end_dt = datetime.strptime(reservation_info['end_time'], TIME_FORMAT).replace(tzinfo=timezone.utc)
+        if isinstance(start_val, str):
+            start_dt = datetime.strptime(start_val, FULL_FORMAT).replace(tzinfo=KST)
+        else:
+            # PostgreSQL TIMESTAMP는 파이썬 datetime으로 자동 변환될 수 있음
+            start_dt = start_val.replace(tzinfo=KST) if start_val.tzinfo is None else start_val
+
+        if isinstance(end_val, str):
+            end_dt = datetime.strptime(end_val, FULL_FORMAT).replace(tzinfo=KST)
+        else:
+            end_dt = end_val.replace(tzinfo=KST) if end_val.tzinfo is None else end_val
         
         # ----------------------------------------------------------------------
         # A. 예약이 이미 끝났는지 확인 (end_time이 현재 시간보다 빠른지)
         # ----------------------------------------------------------------------
-        if end_dt <= now_utc:
+        if end_dt <= now_kst:
             return False, {
                 "error_code": "RESERVATION_ENDED", 
                 "message": "예약 시간이 이미 종료되었습니다."
@@ -1044,7 +1113,7 @@ def check_extension_validity(
         # ----------------------------------------------------------------------
         # B. 사용한 지 2시간이 지났는지 확인 (start_time과 현재 시간 비교)
         # ----------------------------------------------------------------------
-        elapsed_time = now_utc - start_dt
+        elapsed_time = now_kst - start_dt
         if elapsed_time < MIN_ELAPSED_TIME:
             min_minutes = int(MIN_ELAPSED_TIME.total_seconds() / 60)
             return False, {
@@ -1118,16 +1187,33 @@ def execute_extend_reservation(
             return False, {"error_code": "NOT_FOUND", "message": "해당 예약 ID를 찾을 수 없습니다."}
             
         reservation_info = dict(reservation_row)
+
+        # 🚨 수정: 포맷 및 로직 단순화
+        FULL_FORMAT = '%Y-%m-%d %H:%M:%S'
         
-        # --- 2. 새로운 종료 시간 계산 ---
-        # DB의 end_time (TEXT)을 datetime 객체로 변환합니다. (UTC 가정)
-        current_end_dt = datetime.strptime(reservation_info['end_time'], TIME_FORMAT).replace(tzinfo=timezone.utc)
+        end_val = reservation_info['end_time']
         
-        # 새로운 종료 시간 = 기존 종료 시간 + 3시간
+        # 타입 체크 및 변환
+        if isinstance(end_val, str):
+            current_end_dt = datetime.strptime(end_val, FULL_FORMAT).replace(tzinfo=KST)
+        else:
+            current_end_dt = end_val.replace(tzinfo=KST) if end_val.tzinfo is None else end_val
+            
+        # 새로운 종료 시간 (3시간 추가)
         new_end_dt = current_end_dt + EXTENSION_DURATION
         
-        # 쿼리 바인딩을 위한 문자열로 포맷
-        new_end_time_str = new_end_dt.strftime(TIME_FORMAT)
+        # 문자열 포맷팅
+        new_end_time_str = new_end_dt.strftime(FULL_FORMAT)
+
+        # # --- 2. 새로운 종료 시간 계산 ---
+        # # DB의 end_time (TEXT)을 datetime 객체로 변환합니다. (UTC 가정)
+        # current_end_dt = datetime.strptime(reservation_info['end_time'], TIME_FORMAT).replace(tzinfo=timezone.utc)
+        
+        # # 새로운 종료 시간 = 기존 종료 시간 + 3시간
+        # new_end_dt = current_end_dt + EXTENSION_DURATION
+        
+        # # 쿼리 바인딩을 위한 문자열로 포맷
+        # new_end_time_str = new_end_dt.strftime(TIME_FORMAT)
         
         # --- 3. 충돌 확인 (새로운 종료 시간으로 인해 타인 예약과 겹치는지 검사) ---
         # 연장이 타인 예약과 충돌하는지 확인합니다.
@@ -1180,7 +1266,7 @@ def execute_reservation_return(
     # 1. 사용할 테이블과 상태 상수 결정
     table_name = 'seat_reservation'
     # 🚨 CRITICAL FIX: 문자열 대신 Python datetime 객체 그대로 사용 (PostgreSQL 권장)
-    status_value = datetime.now(timezone.utc)
+    status_value = datetime.now(KST)
 
     try:
         # --- 2. UPDATE 쿼리 실행 (return_status 컬럼 업데이트) ---
@@ -1206,5 +1292,54 @@ def execute_reservation_return(
         print(f"Reservation return transaction failed for {table_name}: {e}")
         return False, {"error_code": "DB_ERROR", "message": "예약 반납 중 데이터베이스 오류 발생."}
         
+    finally:
+        conn.close()
+
+        # services/core_service.py
+
+# ... (기존 코드들)
+
+def execute_auto_return():
+    """
+    [스케줄러용] 현재 시간보다 end_time이 지난 예약들을 찾아 자동으로 '반납' 처리합니다.
+    """
+    print("⏰ [Auto Return] 자동 반납 검사 시작...")
+    
+    conn = get_db_connection()
+    if conn is None:
+        print("❌ [Auto Return] DB 연결 실패")
+        return
+
+    cursor = conn.cursor()
+    
+    try:
+        # 현재 시간 (KST)
+        now_kst = datetime.now(KST)
+        current_time_str = now_kst.strftime('%Y-%m-%d %H:%M:%S')
+
+        # 🚨 로직: 
+        # 1. 반납 안 된 상태 (return_time IS NULL)
+        # 2. 종료 시간이 현재 시간보다 과거인 경우 (end_time < NOW)
+        # -> return_time을 현재 시간으로 업데이트 (강제 반납)
+        
+        sql = """
+            UPDATE seat_reservation
+            SET return_time = %s
+            WHERE return_time IS NULL AND end_time < %s
+        """
+        
+        cursor.execute(sql, (current_time_str, current_time_str))
+        count = cursor.rowcount # 몇 개나 반납시켰는지 확인
+        
+        if count > 0:
+            conn.commit()
+            print(f"✅ [Auto Return] 시간이 만료된 좌석 {count}개를 강제 반납 처리했습니다.")
+        else:
+            # 변경 사항 없으면 커밋 불필요 (하지만 안전하게 롤백/닫기)
+            print("💤 [Auto Return] 만료된 좌석이 없습니다.")
+            
+    except Exception as e:
+        print(f"❌ [Auto Return] 오류 발생: {e}")
+        conn.rollback()
     finally:
         conn.close()

@@ -6,6 +6,7 @@ from ..utils.helper_functions import error_response, success_response, format_db
 import base64
 from datetime import datetime, timedelta, timezone
 
+from database import get_db_connection # database.py에 정의된 초기화 함수 임포트
 
 router = APIRouter()
 
@@ -27,6 +28,9 @@ async def reserve_seat_handler(data: Dict[str, Any]):
     sid_found = data.get('sid')
     room_id = data.get('room_id')
     seat_number = data.get('seat_number')
+
+    # 🔍 [Debug 로그 추가] 프론트엔드가 뭘 보냈는지 확인!
+    print(f"🕵️ [Debug] 예약 요청 도착! SID: {sid_found}, Room: {room_id}, Seat: {seat_number}")
     
     if sid_found is None:
         # validate_input이 실패했을 때 400이 발생했어야 하지만, 
@@ -44,6 +48,8 @@ async def reserve_seat_handler(data: Dict[str, Any]):
 
     # 🚨 추가: sid가 DB에 존재하는지 확인 (인증이 분리되었으므로 필수)
     if not check_student_exists(sid_found): 
+        # 🚨 여기서 걸리면 학생이 없는 것
+        print(f"❌ [Debug] 학생을 찾을 수 없음: {sid_found}")
         # 🚨 수정: 오류 코드를 명확히 지정하여 반환
         raise HTTPException(
             status_code=404, 
@@ -52,11 +58,52 @@ async def reserve_seat_handler(data: Dict[str, Any]):
                 message=f"학번 {sid_found}는 등록되지 않은 회원입니다."
             )
         )
+
+    # =================================================================
+    # 🚨 [추가] 1인 1좌석 강제 (중복 예약 방지)
+    # =================================================================
+    # 이 학생(sid)으로 예약된 기록을 다 가져옵니다.
+    print(f"🕵️ [검사 시작] 학번 {sid_found}의 기존 예약 기록 조회 중...")
+    user_reservations = get_reservation_status(conditions={'sid': sid_found})
+    # DB에서 가져온 기록을 터미널에 통째로 출력해봅니다.
+    print(f"📜 [DB 조회 결과] 가져온 기록 개수: {len(user_reservations) if user_reservations else 0}개")
+    print(f"📜 [상세 내용] {user_reservations}")
+    # DB 오류 체크 (튜플로 오면 에러임)
+    if isinstance(user_reservations, tuple) and not user_reservations[0]:
+        raise HTTPException(status_code=500, detail="DB_ERROR_CHECKING_USER")
+
+    # 가져온 기록 중에 "반납 안 한(return_time is None)" 기록이 하나라도 있으면 예약 불가!
+    # (get_reservation_status가 과거 기록까지 다 가져올 수도 있으므로 안전하게 필터링)
+    active_seat = None
+    if user_reservations:
+        for res in user_reservations:
+            # 반납 안 한(None) 기록 찾기
+            print(f"   -> 검사 중: 좌석 {res.get('seat_number')}번, 반납시간: {res.get('return_time')}")
+
+            if res.get('return_time') is None: # 아직 반납 안 함
+                active_seat = res
+                break
+    
+    if active_seat:
+        print(f"❌ [Debug] 중복 예약 차단: {sid_found}는 이미 {active_seat.get('seat_number')}번 사용 중")
+        raise HTTPException(
+            status_code=409, # Conflict
+            detail=error_response(
+                error_code="ALREADY_HAS_SEAT",
+                message=f"이미 좌석({active_seat.get('seat_number')}번)을 이용 중입니다. 반납 후 다시 시도해주세요."
+            )
+        )
+    else:
+        print("✅ [통과] 현재 이용 중인 좌석 없음.")
+    # =================================================================
+    
     # 2-C. 예약하려는 좌석의 존재 여부 확인 (SELECT)
 # 2-C. 예약하려는 좌석의 존재 여부 확인 (SELECT)
     result = get_seat_information(room_id, seat_number)
     
     if isinstance(result, tuple):
+        # 🚨 여기서 걸리면 좌석이 없는 것 (방 ID가 틀렸거나 번호가 틀림)
+        print(f"❌ [Debug] 좌석을 찾을 수 없음! Room: '{room_id}', Seat: '{seat_number}'")
         error_details = result[1]
         error_code = error_details.get('error_code')
         
@@ -78,24 +125,30 @@ async def reserve_seat_handler(data: Dict[str, Any]):
     now_kst = datetime.now(KST)
 
     reservation_date = now_kst.strftime('%Y-%m-%d')
-    start_time_str = now_kst.strftime('%H:%M:%S')
+    # start_time_str = now_kst.strftime('%H:%M:%S')
+    
+    FULL_FORMAT = '%Y-%m-%d %H:%M:%S'
+    start_time_str = now_kst.strftime(FULL_FORMAT)
+
+    end_time_dt = now_kst + timedelta(hours=3)
+
+    end_time_str = end_time_dt.strftime(FULL_FORMAT)
 
     # 3시간 후 계산 (날짜가 바뀌는 경우는 일단 무시)
-    end_time_dt = now_kst + timedelta(hours=3)
     # end_time_str = end_time_dt.strftime('%H:%M:%S')
-    end_time_str = end_time_dt.strftime('%H:%M:%S')
+    # end_time_str = end_time_dt.strftime('%H:%M:%S')
 
     # 4. 운영 시간 및 예약 가능 시간 검증 (check_time)
-    operating_hours = get_room_operating_hours(room_id) # core_service에서 운영 시간을 가져와야 함
+    # operating_hours = get_room_operating_hours(room_id) # core_service에서 운영 시간을 가져와야 함
 
-    if operating_hours is None:
-        raise HTTPException(status_code=404, detail="ROOM_NOT_FOUND")
+    # if operating_hours is None:
+    #     raise HTTPException(status_code=404, detail="ROOM_NOT_FOUND")
     
-    success, error_details = check_time(start_time_str, end_time_str, operating_hours)
+    # success, error_details = check_time(start_time_str, end_time_str, operating_hours)
 
-    if not success:
-        # 🚨 check_time 내부에서 WRONG_TIME 또는 OPERATING_HOURS_VIOLATION 오류 처리
-        raise HTTPException(status_code=409, detail=error_details.get('error_code'))
+    # if not success:
+    #     # 🚨 check_time 내부에서 WRONG_TIME 또는 OPERATING_HOURS_VIOLATION 오류 처리
+    #     raise HTTPException(status_code=409, detail=error_details.get('error_code'))
         
     # 5. 시간 충돌 검사 (check_time_overlap)
     # 예약이 겹치는지 DB를 확인 (SELECT)
@@ -105,15 +158,49 @@ async def reserve_seat_handler(data: Dict[str, Any]):
 
     # 5. 시간 충돌 검사 (check_time_overlap)
     # 🚨 CRITICAL FIX: check_time_overlap의 매개변수를 DB에 맞게 전달
-    if check_time_overlap(
-        start_time_str,      # 🚨 시작 시간 (TIME)
-        end_time_str,        # 🚨 종료 시간 (TIME)
-        reservation_date,    # 🚨 날짜 (DATE)
-        room_id,             # room_id
-        seat_number,         # seat_number
-    ):
-        raise HTTPException(status_code=409, detail="ALREADY_RESERVED_OVERLAP")
+    # if check_time_overlap(
+    #     start_time_str,      # 🚨 시작 시간 (TIME)
+    #     end_time_str,        # 🚨 종료 시간 (TIME)
+    #     reservation_date,    # 🚨 날짜 (DATE)
+    #     room_id,             # room_id
+    #     seat_number,         # seat_number
+    # ):
+    #     raise HTTPException(status_code=409, detail="ALREADY_RESERVED_OVERLAP")
         
+    
+    # 5. 운영 시간 및 예약 가능 시간 검증 (check_time)
+    operating_hours = get_room_operating_hours(room_id)
+    
+    if operating_hours is None:
+        print(f"❌ [Debug] 운영 시간 정보 없음 (Room ID: {room_id})")
+        raise HTTPException(status_code=404, detail="ROOM_NOT_FOUND")
+    
+    # 디버깅 로그 추가
+    print(f"🕒 [Debug] 운영 시간: {operating_hours}")
+    print(f"🕒 [Debug] 예약 요청 시간: {start_time_str} ~ {end_time_str}")
+
+    success, error_details = check_time(now_kst.strftime('%H:%M:%S'), end_time_dt.strftime('%H:%M:%S'), operating_hours)
+
+    if not success:
+        # 🚨 범인 1호: 운영 시간 위반
+        error_code = error_details.get('error_code')
+        print(f"❌ [Debug] 시간 검증 실패: {error_code}")
+        raise HTTPException(status_code=409, detail=error_code)
+        
+    # 6. 시간 충돌 검사 (check_time_overlap)
+    is_overlap = check_time_overlap(
+        start_time_str,
+        end_time_str,
+        reservation_date,
+        room_id,
+        seat_number,
+    )
+    
+    if is_overlap:
+        # 🚨 범인 2호: 중복 예약 (테이블이 비었는데 이게 뜨면 로직 오류)
+        print(f"❌ [Debug] 중복 예약 감지됨 (Overlap)")
+        raise HTTPException(status_code=409, detail="ALREADY_RESERVED_OVERLAP")
+    
     # 6. 최종 예약 생성 (INSERT)
     reservation_data = {
         'sid': sid_found,
@@ -196,7 +283,7 @@ async def get_seat_status_handler(
     conditions = {k: v for k, v in conditions.items() if v is not None} # None 값 제거
         
     # 1. 조건에 맞는 예약 기록 조회 (SELECT)
-    result = get_reservation_status(table_name='seat_reservation', conditions=conditions)
+    result = get_reservation_status(conditions=conditions)
     
     # 500 DB 실행 오류 확인
     if isinstance(result, tuple) and not result[0]:
@@ -398,3 +485,43 @@ async def extend_seat_reservation_handler(data: Dict[str, Any]):
         status_code=status.HTTP_201_CREATED,
         data={"reservation_id": res_id}
     )
+
+# seat_api.py 맨 아래에 추가
+
+@router.get("/stats")
+async def get_seat_stats_handler():
+    """
+    [API Handler] 각 열람실별 총 좌석 수와 현재 사용 중인 좌석 수를 반환합니다.
+    """
+    # 실제로는 DB의 study_room_status 테이블이나 seat_reservation을 조회해야 합니다.
+    # 여기서는 예시로 seat_reservation 테이블에서 room_id별 개수를 센다고 가정합니다.
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # 각 열람실별 현재 활성화된(return_time이 NULL인) 예약 수 조회
+    sql = """
+        SELECT room_id, COUNT(*) as used_count 
+        FROM seat_reservation 
+        WHERE return_time IS NULL 
+        GROUP BY room_id
+    """
+    cursor.execute(sql)
+    rows = cursor.fetchall()
+    conn.close()
+    
+    # 초기 데이터 (총 좌석 수는 고정값이거나 study_room 테이블에서 가져와야 함)
+    stats = {
+        "1": {"total": 379, "current": 0},       # 제1열람실
+        "2-1": {"total": 270, "current": 0},     # 제2-1열람실
+        "2-2": {"total": 136, "current": 0},     # 제2-2열람실
+        "2-2_grad": {"total": 62, "current": 0}  # 대학원생
+    }
+    
+    for row in rows:
+        rid = row['room_id']
+        count = row['used_count']
+        if rid in stats:
+            stats[rid]['current'] = count
+            
+    return success_response(message="STATS_SUCCESS", status_code=200, data=stats)

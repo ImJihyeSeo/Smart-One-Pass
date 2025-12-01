@@ -7,6 +7,29 @@ from PySide6.QtGui import QFont, QMouseEvent
 from ui_style import CustomAlertDialog
 from .base_page import BasePage 
 
+# 백엔드 API 연동
+import requests
+import sys
+import os
+
+# 세션 매니저 경로 설정
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+try:
+    from session_manager import UserSession
+except ImportError:
+    print("Warning: session_manager not found")
+
+# API 주소
+API_BASE_URL = "http://34.213.241.165:8000/seat"
+
+# [중요] 프론트엔드 room_id(숫자)와 백엔드 room_id(문자열) 매핑
+ROOM_ID_MAP = {
+    1: "1",         # 제1열람실
+    2: "2-1",       # 제2-1열람실
+    3: "2-2",       # 제2-2열람실
+    4: "2-2_grad"   # 대학원생 전용
+}
+
 
 # ======================================================================
 # 가상 DB Manager (DB 연동 모듈로 대체 필요)
@@ -17,32 +40,71 @@ class DBManager:
         pass
 
     def get_all_seat_statuses(self, room_id=1):
-        """ 특정 열람실의 모든 좌석 상태 조회 """
-        # 임시 데이터: 제1열람실 (room_id: 1) 및 제2-1열람실 (room_id: 2) 상태
-        if room_id == 1:
-            reserved_seats = [1, 2, 97, 101, 141, 142, 261, 345]
-            all_seats = list(range(1, 380 + 1)) # 전체 좌석 ID
+        """ [API 연동] 서버에서 예약된 좌석 정보를 가져와 상태를 설정합니다. """
         
-        elif room_id == 2:
-            reserved_seats = [1, 5, 20, 30, 45, 60, 100, 150, 200, 250]
-            all_seats = list(range(1, 270 + 1))
-
-        elif room_id == 3:  # 제2-2열람실
-            reserved_seats = [5, 11, 25, 33, 65, 92, 118, 140, 157, 161]
-            all_seats = list(range(1, 176 + 1))
-
-        elif room_id == 4:  # 제2-2열람실(대학원생)
-            reserved_seats = [67, 100, 121, 130, 177, 185]
-            all_seats = list(range(1, 198 + 1))
+        # 1. 서버용 room_id로 변환
+        server_room_id = ROOM_ID_MAP.get(room_id, str(room_id))
+        
+        # 2. 전체 좌석 수 설정 (고정값 유지)
+        if room_id == 1: max_seat = 380
+        elif room_id == 2: max_seat = 270
+        elif room_id == 3: max_seat = 176
+        elif room_id == 4: max_seat = 198
+        else: max_seat = 0
+            
+        # 기본 상태는 모두 'available'로 초기화
+        all_seats = list(range(1, max_seat + 1))
+        statuses = {seat_id: "available" for seat_id in all_seats}
+        
+        try:
+            # 3. API 호출: 해당 열람실의 예약된 좌석 리스트 조회
+            # GET /seat/status?room_id=...
+            response = requests.get(f"{API_BASE_URL}/status", params={"room_id": server_room_id})
+            
+            if response.status_code == 200:
+                data_list = response.json().get("data", [])
                 
-        else:
-            return {}
+                # 4. 예약된 좌석들의 상태를 'reserved'로 변경
+                for reservation in data_list:
+                    seat_num = reservation.get("seat_number")
+                    if seat_num:
+                        statuses[int(seat_num)] = "reserved"
+            else:
+                print(f"Failed to load seats: {response.text}")
 
-        statuses = {}
-        for seat_id in all_seats:
-            statuses[seat_id] = "reserved" if seat_id in reserved_seats else "available"
-
+        except Exception as e:
+            print(f"Network Error (Get Seats): {e}")
+            
         return statuses
+
+    # 기존 코드 주석화
+    # def get_all_seat_statuses(self, room_id=1):
+    #     """ 특정 열람실의 모든 좌석 상태 조회 """
+    #     # 임시 데이터: 제1열람실 (room_id: 1) 및 제2-1열람실 (room_id: 2) 상태
+    #     if room_id == 1:
+    #         reserved_seats = [1, 2, 97, 101, 141, 142, 261, 345]
+    #         all_seats = list(range(1, 380 + 1)) # 전체 좌석 ID
+        
+    #     elif room_id == 2:
+    #         reserved_seats = [1, 5, 20, 30, 45, 60, 100, 150, 200, 250]
+    #         all_seats = list(range(1, 270 + 1))
+
+    #     elif room_id == 3:  # 제2-2열람실
+    #         reserved_seats = [5, 11, 25, 33, 65, 92, 118, 140, 157, 161]
+    #         all_seats = list(range(1, 176 + 1))
+
+    #     elif room_id == 4:  # 제2-2열람실(대학원생)
+    #         reserved_seats = [67, 100, 121, 130, 177, 185]
+    #         all_seats = list(range(1, 198 + 1))
+                
+    #     else:
+    #         return {}
+
+    #     statuses = {}
+    #     for seat_id in all_seats:
+    #         statuses[seat_id] = "reserved" if seat_id in reserved_seats else "available"
+
+    #     return statuses
 
 
 # ----------------------------------------------------------------------
@@ -240,24 +302,81 @@ class BaseSeatMapPage(BasePage):
         dialog = CustomAlertDialog(info_message, self, buttons=buttons)
         dialog.exec()
 
+    # 백엔드 API 연동
     def _process_reservation(self, seat_id):
-        # 실제 DB 업데이트 필요
-        # 다음 페이지 전환
-        complete_message = {
-            "title": "배정완료",
-            "body": f"{self.room_name} {self._get_styled_seat_number(seat_id)}번",
-            "footer": ""
-        }
-        complete_buttons = [
-            {
-                'text': '확인', 
-                'style': 'confirm', 
-                'callback': lambda: self.switch_callback("idle")
-            }
-        ]
+        """ [API 연동] 좌석 예약 요청을 보냅니다. """
         
-        complete_dialog = CustomAlertDialog(complete_message, self, buttons=complete_buttons)
-        complete_dialog.exec()
+        # 1. 로그인 정보 확인
+        current_sid = UserSession.instance().get_user_id()
+        if not current_sid:
+            CustomAlertDialog({"title": "오류", "body": "로그인 정보가 없습니다.", "footer": ""}, self).exec()
+            return
+
+        # 2. 현재 페이지의 room_id 찾기 (이름 -> ID 역매핑)
+        NAME_TO_ID = {
+            "제1열람실": "1",
+            "제2-1열람실": "2-1",
+            "제2-2열람실": "2-2",
+            "제2-2열람실\n(대학원생 전용)": "2-2_grad"
+        }
+        server_room_id = NAME_TO_ID.get(self.room_name, "1")
+
+        try:
+            # 3. API 호출 (POST /seat/reserve)
+            payload = {
+                "sid": current_sid,
+                "room_id": server_room_id,
+                "seat_number": seat_id
+            }
+            
+            response = requests.post(f"{API_BASE_URL}/reserve", json=payload)
+            
+            if response.status_code == 201:
+                # 성공 시 완료 팝업 -> 메인으로 이동
+                complete_message = {
+                    "title": "배정완료",
+                    "body": f"{self.room_name} {self._get_styled_seat_number(seat_id)}번",
+                    "footer": ""
+                }
+                complete_buttons = [{
+                    'text': '확인', 
+                    'style': 'confirm', 
+                    'callback': lambda: self.switch_callback("idle")
+                }]
+                CustomAlertDialog(complete_message, self, buttons=complete_buttons).exec()
+                
+            elif response.status_code == 409:
+                # 이미 예약된 좌석 등 정책 위반
+                error_msg = response.json().get("detail", {}).get("message", "예약할 수 없습니다.")
+                CustomAlertDialog({"title": "배정실패", "body": error_msg, "footer": ""}, self).exec()
+                
+            else:
+                CustomAlertDialog({"title": "오류", "body": "서버 오류가 발생했습니다.", "footer": ""}, self).exec()
+
+        except Exception as e:
+            print(f"Reservation Error: {e}")
+            CustomAlertDialog({"title": "통신오류", "body": "서버와 연결할 수 없습니다.", "footer": ""}, self).exec()
+
+
+    # 기존 코드 주석 처리
+    # def _process_reservation(self, seat_id):
+    #     # 실제 DB 업데이트 필요
+    #     # 다음 페이지 전환
+    #     complete_message = {
+    #         "title": "배정완료",
+    #         "body": f"{self.room_name} {self._get_styled_seat_number(seat_id)}번",
+    #         "footer": ""
+    #     }
+    #     complete_buttons = [
+    #         {
+    #             'text': '확인', 
+    #             'style': 'confirm', 
+    #             'callback': lambda: self.switch_callback("idle")
+    #         }
+    #     ]
+        
+    #     complete_dialog = CustomAlertDialog(complete_message, self, buttons=complete_buttons)
+    #     complete_dialog.exec()
 
     def _setup_common_ui(self, room_id):
         """ 공통 UI (프레임, 드롭다운) 설정 """
@@ -1203,31 +1322,85 @@ class ReadingRoom2_2GradSeatMapPage(BaseSeatMapPage):
         dialog = CustomAlertDialog(info_message, self, buttons=buttons) 
         dialog.exec()
 
-    # 오버라이딩
+    # 백엔드 API 연동
+    # [수정] 대학원생 열람실 전용 예약 처리 (API 연동 추가)
     def _process_reservation(self, seat_id):
-        # 실제 DB 업데이트 필요
-        # 다음 페이지 전환
-
-        styled_seat = self._get_styled_seat_number(seat_id)
-
-        room_name_base = "제2-2열람실"
-        room_name_spec = "(대학원생 전용)"
-
-        complete_message = {
-            "title": "배정완료",
-            "body": f"{room_name_base}<br>{room_name_spec}<br>{styled_seat}번",
-            "footer": ""
-        }
-        complete_buttons = [
-            {
-                'text': '확인', 
-                'style': 'confirm', 
-                'callback': lambda: self.switch_callback("idle")
-            }
-        ]
+        """ [API 연동] 좌석 예약 요청 (대학원생 전용) """
         
-        complete_dialog = CustomAlertDialog(complete_message, self, buttons=complete_buttons)
-        complete_dialog.exec()
+        # 1. 로그인 정보 확인
+        current_sid = UserSession.instance().get_user_id()
+        if not current_sid:
+            CustomAlertDialog({"title": "오류", "body": "로그인 정보가 없습니다.", "footer": ""}, self).exec()
+            return
+
+        # 2. room_id 설정 (대학원생실 고정 ID)
+        server_room_id = "2-2_grad"
+
+        try:
+            # 3. API 호출 (POST /seat/reserve)
+            payload = {
+                "sid": current_sid,
+                "room_id": server_room_id,
+                "seat_number": seat_id
+            }
+            
+            response = requests.post(f"{API_BASE_URL}/reserve", json=payload)
+            
+            if response.status_code == 201:
+                # 4. 성공 시 완료 팝업 (대학원생 전용 메시지 포맷 유지)
+                styled_seat = self._get_styled_seat_number(seat_id)
+                room_name_base = "제2-2열람실"
+                room_name_spec = "(대학원생 전용)"
+
+                complete_message = {
+                    "title": "배정완료",
+                    "body": f"{room_name_base}<br>{room_name_spec}<br>{styled_seat}번",
+                    "footer": ""
+                }
+                complete_buttons = [{
+                    'text': '확인', 
+                    'style': 'confirm', 
+                    'callback': lambda: self.switch_callback("idle")
+                }]
+                CustomAlertDialog(complete_message, self, buttons=complete_buttons).exec()
+                
+            elif response.status_code == 409:
+                # 실패 처리
+                error_msg = response.json().get("detail", {}).get("message", "예약할 수 없습니다.")
+                CustomAlertDialog({"title": "배정실패", "body": error_msg, "footer": ""}, self).exec()
+            else:
+                CustomAlertDialog({"title": "오류", "body": "서버 오류가 발생했습니다.", "footer": ""}, self).exec()
+
+        except Exception as e:
+            print(f"Reservation Error: {e}")
+            CustomAlertDialog({"title": "통신오류", "body": "서버와 연결할 수 없습니다.", "footer": ""}, self).exec()
+
+    # 기존 코드 주석 처리
+    # 오버라이딩
+    # def _process_reservation(self, seat_id):
+    #     # 실제 DB 업데이트 필요
+    #     # 다음 페이지 전환
+
+    #     styled_seat = self._get_styled_seat_number(seat_id)
+
+    #     room_name_base = "제2-2열람실"
+    #     room_name_spec = "(대학원생 전용)"
+
+    #     complete_message = {
+    #         "title": "배정완료",
+    #         "body": f"{room_name_base}<br>{room_name_spec}<br>{styled_seat}번",
+    #         "footer": ""
+    #     }
+    #     complete_buttons = [
+    #         {
+    #             'text': '확인', 
+    #             'style': 'confirm', 
+    #             'callback': lambda: self.switch_callback("idle")
+    #         }
+    #     ]
+        
+    #     complete_dialog = CustomAlertDialog(complete_message, self, buttons=complete_buttons)
+    #     complete_dialog.exec()
 
     def _create_seat_map_layout(self, container, seat_statuses):
         main_vbox = QVBoxLayout(container)

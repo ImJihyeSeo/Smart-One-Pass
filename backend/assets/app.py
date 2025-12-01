@@ -1,1 +1,1 @@
-sqlite3 mydb.db < init.sql
+# sqlite3 mydb.db < init.sql
