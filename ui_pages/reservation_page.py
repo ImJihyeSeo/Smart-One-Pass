@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QHBoxLayout, 
-    QGridLayout, QFrame, QSizePolicy, QSpacerItem, QComboBox, QDialog
+    QGridLayout, QFrame, QSizePolicy, QSpacerItem, QComboBox, QDialog, QApplication
 )
 from PySide6.QtCore import Qt, QDate, QRectF, QRect, QTime, QSize, QPoint
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor
@@ -850,6 +850,53 @@ class ReservationPage(BasePage):
             dialog.exec()
             return
 
+        # 2. 로딩 팝업 생성 및 표시 (버튼 없음 = 빈 리스트 [])
+        loading_msg = {
+            "title": "<b>혼잡도 예측 중<b>",
+            "body": "잠시만 기다려주세요...",
+            "footer": "" # 푸터 없음
+        }
+
+        # buttons=[] 를 전달하면 버튼 없이 메시지만 뜹니다.
+        loading_dialog = CustomAlertDialog(loading_msg, self, buttons=[], width=500)
+
+
+        # # ✅ [추가된 부분] 배경을 불투명하게 강제 변경
+        # # ui_style.py의 기본 반투명 설정을 덮어씁니다.
+        # if hasattr(loading_dialog, 'bg_widget'):
+        #     loading_dialog.bg_widget.setStyleSheet("""
+        #         QLabel#glass {
+        #             background-color: #242424;  /* 불투명한 진한 회색 */
+        #             border: 2px solid #505050;  /* 테두리 추가 */
+        #             border-radius: 25px;
+        #         }
+        #     """)
+
+        # 3. 팝업 띄우기 (exec() 대신 show() 사용)
+        loading_dialog.show()
+
+        # [중요] 애니메이션 강제 종료 및 즉시 표시
+        # requests가 돌기 시작하면 UI가 멈추므로, 애니메이션이 돌 틈이 없습니다.
+        # 따라서 애니메이션 객체를 멈추고, 투명도를 1.0(완전 불투명)으로 강제 설정합니다.
+        if hasattr(loading_dialog, 'fade_anim'):
+            loading_dialog.fade_anim.stop()
+        loading_dialog.setWindowOpacity(1.0)
+    
+
+        # ✅ [추가됨] 배경(Overlay)도 애니메이션 끄기 & 즉시 어둡게 하기
+        # 이걸 안 하면 배경이 어두워지다 말고 투명한 채로 멈춥니다.
+        if loading_dialog.overlay:
+            if hasattr(loading_dialog.overlay, 'anim'):
+                loading_dialog.overlay.anim.stop() # 서서히 어두워지는 애니메이션 중지
+            loading_dialog.overlay.setWindowOpacity(1.0) # 즉시 어둡게 설정
+            loading_dialog.overlay.repaint() # 강제로 그리기
+
+
+        # 화면에 즉시 그리도록 명령
+        loading_dialog.repaint()
+        # 🚨 [중요] UI가 멈추기 전에 팝업을 화면에 그리기 위해 이벤트를 강제 처리합니다.
+        QApplication.processEvents()
+
         # 2. 백엔드 전송용 날짜 포맷 만들기 ("YYYY-MM-DD HH:MM:SS")
         # 예: "2025-11-26 14:00:00"
         target_datetime = f"{date_str} {time_str}:00"
@@ -864,7 +911,9 @@ class ReservationPage(BasePage):
                 json={"target_time": target_datetime},
                 timeout=20 # 5초 타임아웃 설정 (앱 멈춤 방지)
             )
-            
+            # API 호출이 끝나면 로딩 창 닫기
+            loading_dialog.close()
+
             if response.status_code == 200:
                 api_response = response.json()
                 results = api_response["results"] 
