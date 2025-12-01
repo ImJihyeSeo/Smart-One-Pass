@@ -368,7 +368,7 @@ class FaceRecognizer(QObject): # 💡 QObject 상속 필수
 
         # 1. 얼굴 특징 추출 (CPU 작업 - 메인 쓰레드)
         # (이 부분은 불가피하게 메인 스레드에서 해야 하지만, InsightFace가 빨라서 괜찮음)
-        emb, _ = self.embed_biggest(frame_bgr, rrect, use_skip=False)
+        emb, _, _ = self.embed_biggest(frame_bgr, rrect, use_skip=False)
         
         if emb is not None:
             # 2. 로컬 카운팅을 위해 저장
