@@ -322,6 +322,7 @@ class ProcessingPage(BasePage):
                         # 결과 페이지로 이동
                         result_data = (success, self.retries, user_name)
                         self.switch_callback("result", result_data, mode=self.mode)
+                        return
                 # 기존의 코드 주석 처리
                 # # result_page로 결과 데이터 전달 (DB 연동 필요)
                 # user_data = None
