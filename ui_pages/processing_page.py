@@ -219,7 +219,7 @@ class ProcessingPage(BasePage):
             self.guide_opacity_effect.setOpacity(1.0) 
             self.start_time = None
             
-            self.instruction.setText("※ 스푸핑 감지! 실제 얼굴이 아닙니다! ※")
+            self.instruction.setText("※ 실제 얼굴이 아닙니다! ※")
             self.instruction.setStyleSheet(f"{GUIDE_STYLE} color: #ff4444;")            
             self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(255, 0, 0, 150); border-radius: {self.BORDER_RADIUS}px; }}") 
         

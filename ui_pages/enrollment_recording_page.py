@@ -9,10 +9,9 @@ import cv2
 import time
 
 from ui_style import TARGET_W, TARGET_H, BORDER_RADIUS, fade_in_out, GUIDE_STYLE
-# from cv_tools import detect_faces  <-- 🚨 삭제 (더 이상 안 씀)
 from .base_page import BasePage
 
-from faceid.face_recognizer import FaceRecognizer
+from faceid.face_recognizer import FaceRecognizer, rrect_xyxy
 
 # 단계별 최소 샘플 수 (테스트용으로 4장)
 MIN_SAMPLES_PER_INSTRUCTION = 4
@@ -193,6 +192,7 @@ class EnrollmentRecordingPage(BasePage):
 
         frame = cv2.flip(frame, 1)
         h, w, _ = frame.shape
+        rrect = rrect_xyxy(h,w)
         target_h, target_w = self.TARGET_H, self.TARGET_W
 
         # 비율 맞춰 크롭
@@ -210,16 +210,14 @@ class EnrollmentRecordingPage(BasePage):
 
         # 🚨 [수정] 1. AI 모델로 얼굴 특징 및 정보 추출 (가장 중요한 부분)
         # detect_faces 없이 여기서 나온 face_obj를 바로 사용합니다.
-        emb, face_obj, _ = self.face_rec.embed_biggest(frame)
+        emb, face_obj, is_live = self.face_rec.embed_biggest(frame, rrect, use_skip=True)
 
         # 🚨 [수정] 2. 가이드 영역 내 얼굴 확인 로직 단순화
         face_in_guide = False
         
         if face_obj is not None:
-            # AI가 찾은 얼굴 박스 (x1, y1, x2, y2)
-            bbox = face_obj.bbox.astype(int)
-            cx = (bbox[0] + bbox[2]) // 2
-            cy = (bbox[1] + bbox[3]) // 2
+            bx1, by1, bx2, by2 = map(int, face_obj.bbox)
+            cx, cy = (bx1 + bx2) // 2, (by1 + by2) // 2
             
             # 가이드 박스 범위 (화면 중앙 기준 50% 영역)
             guide_margin_w = target_w * 0.25 # 좌우 25%씩 여백 -> 중앙 50%
