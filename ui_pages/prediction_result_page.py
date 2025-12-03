@@ -97,8 +97,10 @@ class PredictionResultPage(BasePage):
         
         # 1. 열람실 이름
         room_name = data.get('name', '알 수 없음')
-        name_label = QLabel(room_name.replace('\n', '<br>'))
-        name_label.setTextFormat(Qt.RichText)
+        # name_label = QLabel(room_name.replace('\n', '<br>'))
+        name_label = QLabel(room_name)
+        name_label.setWordWrap(True)   # ✅ [핵심 1] 텍스트가 길면 알아서 줄바꿈
+        # name_label.setTextFormat(Qt.RichText)
         name_label.setAlignment(Qt.AlignCenter)
         name_label.setStyleSheet("""
             font-size: 26px; 

@@ -510,7 +510,7 @@ class ReservationPage(BasePage):
             else:
                 info_message = {
                     "title": "좌석확인",
-                    "body": "예약된 좌석이 없습니다.",
+                    "body": "현재 이용 중인 좌석이 없습니다.",
                     "footer": "좌석 배정 후 이용해 주세요."
                 }
             dialog_buttons = [{'text': '닫기', 'style': 'cancel', 'callback': None}]
@@ -542,8 +542,8 @@ class ReservationPage(BasePage):
         if not current_reservation:
             message = {
                 "title": "알림",
-                "body": "반납할 좌석이 없습니다.",
-                "footer": "예약 후 이용해 주세요."
+                "body": "현재 이용 중인 좌석이 없습니다.",
+                "footer": "좌석 배정 후 이용해 주세요."
             }
             # 확인 버튼 누르면 그냥 팝업만 닫힘
             buttons = [{'text': '확인', 'style': 'confirm', 'callback': None}]
