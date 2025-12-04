@@ -41,20 +41,6 @@ ROOM_CAPACITY = {
     '제2-2열람실 (대학원생 전용)': 62
 }
 
-# def get_status_and_color(remain: int, total: int):
-#     """
-#     잔여석 비율에 따른 혼잡도 및 색상 반환
-#     """
-        
-#     ratio = remain / total
-    
-    
-#     if ratio > 0.7:
-#         return "여유", "4caf50"   # 50% 이상 남음
-#     elif ratio > 0.3:
-#         return "보통", "ff9800"  # 20~50% 남음
-#     else:
-#         return "혼잡", "f44336"     # 20% 미만 남음
     
 def get_status_and_color(used: int, total: int):
     """

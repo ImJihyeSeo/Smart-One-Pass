@@ -95,39 +95,6 @@ def initialize_db():
             used_seat INTEGER NOT NULL, 
             FOREIGN KEY (room_id) REFERENCES study_room(room_id)
         );
-
-        --Random Forest용 로그
-        CREATE TABLE IF NOT EXISTS study_room_feature_log (
-            log_id SERIAL PRIMARY KEY,
-            
-            -- 1. 기본 식별 정보
-            room_id VARCHAR(50) NOT NULL,    -- CSV의 '열람실 ID' (매핑 필요 시 주의)
-            record_time TIMESTAMP WITH TIME ZONE NOT NULL, -- '년','월','일','시간'을 하나로 합침
-            
-            -- 2. 좌석 정보 (CSV: 잔여좌석, 전체좌석, 사용중)
-            total_seat INTEGER NOT NULL,     -- 전체좌석
-            used_seat INTEGER NOT NULL,      -- 사용중
-            remain_seat INTEGER NOT NULL,    -- 잔여좌석 (Target)
-            
-            -- 3. EMA 피처 (핵심 모델 재료)
-            ema_short DOUBLE PRECISION DEFAULT 0.0,    -- CSV: EMA_Short (단기)
-            ema_periodic DOUBLE PRECISION DEFAULT 0.0, -- CSV: EMA_Periodic (장기)
-            
-            -- 4. 날짜/시즌 특성 플래그 (CSV 피처 반영)
-            exam_flag INTEGER DEFAULT 0,          -- CSV: Exam_Flag
-            holiday_flag INTEGER DEFAULT 0,       -- CSV: Holiday_Flag
-            post_holiday_flag INTEGER DEFAULT 0,  -- CSV: Post_Holiday_Flag
-            
-            -- 5. 메타 정보 (언제 수집했는지)
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            
-            -- 외래 키 (필요한 경우만 사용, room_id가 study_room 테이블과 일치한다는 가정)
-            FOREIGN KEY (room_id) REFERENCES study_room(room_id)
-        );
-        
-        -- (선택) 빠른 조회를 위한 인덱스 생성 (시간순 정렬 조회 시 속도 향상)
-        CREATE INDEX IF NOT EXISTS idx_feature_log_time ON study_room_feature_log (record_time);
-        CREATE INDEX IF NOT EXISTS idx_feature_log_room ON study_room_feature_log (room_id);
     """
     
     cursor = conn.cursor()
@@ -142,15 +109,3 @@ def initialize_db():
     finally:
         cursor.close()
         conn.close()
-
-    # Note: main.py에서 initialize_db()를 서버 시작 전에 호출해야 합니다.
-
-
-    
-        # -- study_room_seat 테이블
-        # CREATE TABLE IF NOT EXISTS study_room_seat (
-        #     room_id VARCHAR(50) NOT NULL, 
-        #     seat_number INTEGER NOT NULL, 
-        #     PRIMARY KEY (room_id, seat_number), 
-        #     FOREIGN KEY (room_id) REFERENCES study_room(room_id)
-        # );
