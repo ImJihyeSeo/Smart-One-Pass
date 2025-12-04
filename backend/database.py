@@ -1,30 +1,18 @@
-# database.py
-
-
 import psycopg2
-from psycopg2 import extras
 import os
-from typing import Optional
 
 from dotenv import load_dotenv
 
-# .env 파일에서 환경 변수를 로드합니다.
 load_dotenv() 
 
-# AWS로 전환하기 쉽도록 DATABASE_URL 환경 변수를 사용합니다.
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db_connection():
-    """PostgreSQL DB에 연결하고 Connection 객체를 반환합니다."""
     if not DATABASE_URL:
         print("FATAL: DATABASE_URL 환경 변수가 설정되지 않았습니다.")
         return None
     try:
-        # PostgreSQL 연결 문자열을 사용하여 접속
         conn = psycopg2.connect(DATABASE_URL)
-        # 결과를 딕셔너리처럼 가져오기 위한 설정
-        # (SQLite의 conn.row_factory = sqlite3.Row 역할)
-        # conn.row_factory = extras.RealDictCursor 를 사용하려면 cursor를 만들 때 지정합니다.
 
         conn.cursor_factory = psycopg2.extras.RealDictCursor
 
@@ -43,8 +31,6 @@ def initialize_db():
     if conn is None:
         return
 
-    # PostgreSQL용 SQL 문법으로 테이블을 정의합니다.
-    # PRIMARY KEY가 필요한 테이블은 INTEGER 대신 SERIAL을 사용해 자동 증가를 설정합니다.
     CREATE_TABLES_SQL = """
         -- students 테이블 (face: BLOB -> BYTEA)
         CREATE TABLE IF NOT EXISTS students (
@@ -70,19 +56,16 @@ def initialize_db():
             open TIME NOT NULL,
             close TIME NOT NULL
         );
-
+        
         -- study_room_seat 테이블
         CREATE TABLE IF NOT EXISTS study_room_seat (
             room_id VARCHAR(50) NOT NULL, 
             seat_number INTEGER NOT NULL, 
             PRIMARY KEY (room_id, seat_number), 
-            CONSTRAINT fk_study_room 
-                FOREIGN KEY (room_id) 
-                REFERENCES study_room(room_id)
-                ON DELETE CASCADE  -- (선택 사항) 열람실이 삭제되면 좌석도 자동 삭제
+            FOREIGN KEY (room_id) REFERENCES study_room(room_id)
         );
 
-        -- seat_reservation 테이블 (reservation_id: INTEGER -> SERIAL, 날짜/시간 타입 변경)
+        -- seat_reservation 테이블
         CREATE TABLE IF NOT EXISTS seat_reservation (
             reservation_id SERIAL PRIMARY KEY,
             sid VARCHAR(50) NOT NULL, 
@@ -96,7 +79,7 @@ def initialize_db():
             FOREIGN KEY (room_id, seat_number) REFERENCES study_room_seat(room_id, seat_number)
         );
 
-        -- study_room_status 테이블 (status_id: INTEGER -> SERIAL, record_time 타입 변경)
+        -- study_room_status 테이블
         CREATE TABLE IF NOT EXISTS study_room_status (
             status_id SERIAL PRIMARY KEY, 
             room_id VARCHAR(50) NOT NULL, 
@@ -109,25 +92,12 @@ def initialize_db():
     
     cursor = conn.cursor()
     try:
-        # 모든 테이블 생성 SQL을 한 번에 실행합니다.
         cursor.execute(CREATE_TABLES_SQL)
         conn.commit()
         print("PostgreSQL 테이블 구조가 성공적으로 생성되었습니다.")
     except Exception as e:
         print(f"Database initialization error: {e}")
-        conn.rollback() # 오류 발생 시 작업을 되돌립니다.
+        conn.rollback() 
     finally:
         cursor.close()
         conn.close()
-
-    # Note: main.py에서 initialize_db()를 서버 시작 전에 호출해야 합니다.
-
-
-    
-        # -- study_room_seat 테이블
-        # CREATE TABLE IF NOT EXISTS study_room_seat (
-        #     room_id VARCHAR(50) NOT NULL, 
-        #     seat_number INTEGER NOT NULL, 
-        #     PRIMARY KEY (room_id, seat_number), 
-        #     FOREIGN KEY (room_id) REFERENCES study_room(room_id)
-        # );
