@@ -53,9 +53,8 @@ class EnrollmentRecordingPage(BasePage):
         self.state = "IDLE"
         self.last_state_change_time = time.time()
 
-        # 🚨 [추가] 마지막으로 샘플을 찍은 시간을 기록할 변수
         self.last_sample_time = 0 
-        self.sample_interval = 1  # 0.5초마다 한 장씩 찍기 (속도 조절은 여기서!)
+        self.sample_interval = 1
        
         # 샘플 수 계산
         total_instructions = sum(len(step['instructions']) for step in ENROLLMENT_STEPS)
@@ -208,11 +207,10 @@ class EnrollmentRecordingPage(BasePage):
             frame = frame[start_y:start_y + new_h, :]
         frame = cv2.resize(frame, (target_w, target_h))
 
-        # 🚨 [수정] 1. AI 모델로 얼굴 특징 및 정보 추출 (가장 중요한 부분)
-        # detect_faces 없이 여기서 나온 face_obj를 바로 사용합니다.
+        # AI 모델로 얼굴 특징 및 정보 추출
         emb, face_obj, is_live = self.face_rec.embed_biggest(frame, rrect, use_skip=True)
 
-        # 🚨 [수정] 2. 가이드 영역 내 얼굴 확인 로직 단순화
+        # 가이드 영역 내 얼굴 확인 로직 단순화
         face_in_guide = False
         
         if face_obj is not None:
@@ -227,7 +225,6 @@ class EnrollmentRecordingPage(BasePage):
                (guide_margin_h < cy < target_h - guide_margin_h):
                 face_in_guide = True
 
-        # --- 상태 진행 로직 ---
         if self.current_step_index >= len(ENROLLMENT_STEPS):
             self.timer.stop()
             self.show_overlay_message("등록 완료!", 1000)
@@ -245,16 +242,14 @@ class EnrollmentRecordingPage(BasePage):
             required_samples = current_instruction_data["min_samples"]
 
             if self.accum_samples_count_current_instruction < required_samples:
-                # 🚨 [수정] 가이드 안에 있고 + AI가 특징을 뽑았으면(emb) -> 저장
 
                 # 현재 시간 확인
                 current_time = time.time()
 
                 if face_in_guide and emb is not None:
 
-                    # 🚨 [추가] 마지막 촬영 후 0.5초가 지났는지 확인
                     if current_time - self.last_sample_time >= self.sample_interval:
-                        self.last_sample_time = current_time  # 촬영 시간 갱신
+                        self.last_sample_time = current_time 
 
                         self.set_overlay_opacity(0)
                         if self.guide_animation.state() != QAbstractAnimation.Running:
@@ -361,7 +356,6 @@ class EnrollmentRecordingPage(BasePage):
             else:
                 self.show_overlay_message("촬영 완료!")
                 self.timer.stop()
-                # 🚨 [수정] 등록 완료 처리
                 success = self.face_rec.finish_enrollment()
                 if success:
                     self.switch_callback("result", self.user_data, mode="enroll")

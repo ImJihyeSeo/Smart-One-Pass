@@ -70,22 +70,22 @@ class ResultPage(BasePage):
                 icon_file = "resources/check.png"
                 main_message = f"환영합니다, {name}님!"
                 sub_message = "예약 페이지로 자동 전환됩니다."
-                next_page = "reservation"   # 쓰이지 않음 - 성공 시 바로 reservation 페이지로 이동 - 학생 정보(self.user_data) 전달
+                next_page = "reservation"   
             elif remaining_retries > 0:
                 icon_file = "resources/alert.png"
                 main_message = "인식 실패! 다시 시도해주세요."
                 sub_message = f"남은 횟수: {remaining_retries}회"
-                next_page = "processing"    # 재시도 시 processing 페이지로, 모드 유지
+                next_page = "processing"    
             else:
                 icon_file = "resources/alert.png"
                 main_message = "인식에 최종 실패했습니다."
                 sub_message = "학생증을 이용해 주세요."
-                next_page = "idle"  # 최종 실패 시 idle 페이지로
+                next_page = "idle"  
 
         elif self.mode == "enroll":
             # 등록 모드: user_data (dict)를 받음
             user_data = result_data
-            self.success = True # 등록 성공 간주 (enrollment_recording_page에서 실패 시 전환 안 함)
+            self.success = True 
             remaining_retries = 0 
             
             icon_file = "resources/check.png"

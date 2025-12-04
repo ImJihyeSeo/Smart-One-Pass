@@ -194,39 +194,29 @@ class EnrollmentInputPage(BasePage):
             user_data = {"name": name, "student_id": student_id}
             
             if error_message and "네트워크 연결 오류" in error_message:
-                # 🚨 네트워크 오류 처리
                 self._show_popup("네트워크 오류", f"AWS 서버 접속 실패:<br>{error_message}")
                 return
             
             if is_exist:
-                # 🚨 409 Conflict (이미 존재함) -> 로그인 성공으로 간주하고 진행
-            
-                # ---------------------------------------------------------
-                # [추가된 부분 2] 로그인 성공 시 세션 매니저에 정보 저장
-                # ---------------------------------------------------------
                 try:
                     UserSession.instance().login(user_id=student_id, name=name)
                     print(f"Session Saved: {UserSession.instance().get_user_id()}, {UserSession.instance().name}")
                 except NameError:
                     print("Session Manager가 임포트되지 않아 저장에 실패했습니다.")
-                # 🚨 409 Conflict 처리: 중복 발견 시
                 self.switch_callback("enrollment_start", user_data)
                 return
                 
             elif error_message:
-                # 🚨 기타 서버 오류 (500 Internal Server Error 등)
                 self._show_popup("서버 오류", error_message)
                 return
                 
             else:
-                # 5. 성공: DB에 중복 없음 확인 (200 OK)
                 self._show_popup("등록 불가", error_message)
 
     def validate_and_switch(self):
         name = self.name_input.text().strip()
         student_id = self.student_id_input.text().strip()
         
-        # 유효성 검사
         if not name:
             self._show_popup("입력 오류", "이름을 입력해 주세요.")
             return
@@ -235,22 +225,8 @@ class EnrollmentInputPage(BasePage):
             self._show_popup("입력 오류", "정확한 8자리 학번을<br>입력해 주세요.")
             return
         
-        # 백엔드 API 연동
-
-        # DB 확인 부분
-
-        # 1. [API 호출 시작] 워커 스레드 생성
         self.worker = WorkerThread(name, student_id)
         
-        # 2. API 응답을 받았을 때 실행될 함수 연결
         self.worker.finished.connect(self.handle_api_response)
         
-        # 3. 워커 스레드 시작 (UI는 멈추지 않음)
         self.worker.start()
-        
-
-        # 그 전 코드는 주석으로 처리
-
-        # handle_api_response 맨 아래에 옮김
-        # user_data = {"name": name, "student_id": student_id}
-        # self.switch_callback("enrollment_start", user_data)

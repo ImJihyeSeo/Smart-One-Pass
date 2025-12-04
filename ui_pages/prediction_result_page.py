@@ -38,12 +38,12 @@ class PredictionResultPage(BasePage):
         card_layout.setContentsMargins(50, 40, 50, 40)
         card_layout.setSpacing(30)
 
-        # ✅ [핵심 수정 1] 그리드 레이아웃 초기화
+        # 그리드 레이아웃 초기화
         self.grid_layout = QGridLayout()
         self.grid_layout.setSpacing(20) 
         self.grid_layout.setContentsMargins(0, 0, 0, 0)
 
-        # ✅ [핵심 수정 2] 그리드 컨테이너를 생성하고 레이아웃에 바로 추가
+        # 그리드 컨테이너를 생성하고 레이아웃에 바로 추가
         grid_container = QWidget()
         grid_container.setLayout(self.grid_layout) 
         card_layout.addWidget(grid_container)
@@ -70,7 +70,7 @@ class PredictionResultPage(BasePage):
             col = i % 2
             self.grid_layout.addWidget(card, row, col)
             
-        print("✅ 프론트엔드 화면 갱신 완료 (Real Data)")
+        print("프론트엔드 화면 갱신 완료")
 
     def _init_loading_state(self):
         """ 로딩 중일 때 보여줄 임시 데이터 """
@@ -124,10 +124,7 @@ class PredictionResultPage(BasePage):
                 scaled = pixmap.scaledToHeight(ICON_HEIGHT, Qt.SmoothTransformation)
                 icon_label.setPixmap(scaled)
         item_layout.addWidget(icon_label, alignment=Qt.AlignCenter)
-        
-        # 3. 텍스트 (✅ 요청하신 색상 매핑 적용 부분)
-        
-        # 👇 [수정됨] 색상 매핑 정의
+                
         STATUS_MAP = {
             "혼잡": "#E74C3C",  # 붉은색
             "보통": "#F1C40F",  # 노란색

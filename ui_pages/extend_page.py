@@ -3,10 +3,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from .base_page import BasePage
-# from ui_style import BUTTON_STYLE, CANCEL_BUTTON_STYLE, TITLE_STYLE
 from ui_style import BUTTON_STYLE, CANCEL_BUTTON_STYLE, TITLE_STYLE, CustomAlertDialog
-
-# 백엔드 API 연동
 import sys
 import requests
 from datetime import datetime, timedelta
@@ -22,13 +19,6 @@ from session_manager import UserSession
 
 API_BASE_URL = "http://34.213.241.165:8000/seat"
 
-# 현재 로그인한 사용자 ID (로그인 시점에 저장된 전역 변수나 설정에서 가져와야 함)
-# 테스트를 위해 임시 값 설정
-# CURRENT_USER_SID = "20181234"
-
-
-
-
 class ExtendSeatPage(BasePage):
     """좌석 연장 페이지"""
 
@@ -36,17 +26,6 @@ class ExtendSeatPage(BasePage):
         super().__init__(switch_callback)
         self.setObjectName("ExtendSeatPage")
 
-        # 좌석 정보 (DB 연동 필요)
-        # self.seat_data = {
-        #     "seat_room": "2-1",
-        #     "seat_number": "53",
-        #     "assigned_time_start": "1:00",  # 배정 시작
-        #     "assigned_time_end": "7:00",    # 배정 종료
-        #     "extend_duration": "3", # 연장 시간
-        #     "new_end_time": "10:00" # 연장 후 종료 시간
-        # }
-
-        # 백엔드 API 연동
         # 현재 예약 정보를 담을 변수 초기화
         self.current_reservation_id = None
         self.seat_data = {
@@ -54,11 +33,10 @@ class ExtendSeatPage(BasePage):
             "seat_number": "-",
             "assigned_time_start": "-",
             "assigned_time_end": "-",
-            "extend_duration": "3", # core_service.py에 EXTENSION_DURATION = 3시간으로 고정됨
+            "extend_duration": "3",
             "new_end_time": "-"
         }
         
-        # ✅ [수정 1] 라벨 저장용 딕셔너리 초기화 (이게 없어서 에러가 났음)
         self.value_labels = {}
         
         CARD_BG = "#242424"
@@ -127,12 +105,9 @@ class ExtendSeatPage(BasePage):
         line_frame.setFixedWidth(1) 
         line_frame.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
-        # # 오른쪽 값 라벨
-        # value_layout = QVBoxLayout()
-        # value_layout.setSpacing(30)
 
-        # [오른쪽] 값 라벨 (여기를 수정함)
-        value_container = QWidget() # 레이아웃 에러 방지용 컨테이너
+        # 오른쪽 값 라벨
+        value_container = QWidget()
         value_layout = QVBoxLayout(value_container)
         value_layout.setSpacing(30)
         value_layout.setContentsMargins(0, 0, 0, 0)
@@ -160,14 +135,7 @@ class ExtendSeatPage(BasePage):
             f'</span>'
         ]
 
-        # for html in value_htmls:
-        #     lbl = QLabel(html)
-        #     lbl.setTextFormat(Qt.RichText)
-        #     lbl.setWordWrap(False)
-        #     value_layout.addWidget(lbl, alignment=Qt.AlignLeft)
-        
-        # ✅ [수정 2] create_value_label 메서드를 사용해 라벨을 생성하고 딕셔너리에 저장
-        # (기존의 for html in value_htmls 루프 삭제함)
+        # create_value_label 메서드를 사용해 라벨을 생성하고 딕셔너리에 저장
         self.create_value_label("seat_info", value_layout, WHITE)
         self.create_value_label("time_info", value_layout, WHITE)
         self.create_value_label("extend_time", value_layout, BLUE, is_bold=True, suffix="시간")
@@ -176,8 +144,7 @@ class ExtendSeatPage(BasePage):
         # 레이아웃 배치
         card_h_layout.addWidget(key_container)
         card_h_layout.addWidget(line_frame)
-        # card_h_layout.addLayout(value_layout)
-        card_h_layout.addWidget(value_container) # ✅ 컨테이너를 넣어야 안전함
+        card_h_layout.addWidget(value_container)
 
         # 연장 버튼
         extend_btn = QPushButton("연장")
@@ -201,16 +168,7 @@ class ExtendSeatPage(BasePage):
         main_layout.addLayout(btn_h_layout)
         main_layout.addStretch(1)
 
-        # 백엔드 API 연동
-        # 페이지 로드 시 데이터 가져오기 (UI가 그려진 후 실행)
         QTimer.singleShot(100, self.fetch_seat_info)
-
-    # def _handle_extend(self):
-    #     """좌석 연장 처리 (DB 연동 필요)"""
-    #     self.switch_callback("result", mode="extend")
-
-
-    # 백엔드 API 연동
 
     def create_value_label(self, key, layout, color, is_bold=False, suffix=""):
         """라벨을 생성하고 나중에 업데이트할 수 있도록 저장"""
@@ -227,26 +185,8 @@ class ExtendSeatPage(BasePage):
     def update_ui_labels(self):
         """self.seat_data를 바탕으로 UI 텍스트 갱신"""
 
-        # ✅ [안전장치] 페이지가 닫혔거나 라벨이 없으면 중단
         if not hasattr(self, 'value_labels') or not self.value_labels:
             return
-        
-        # # 1. 좌석 정보
-        # self.value_labels["seat_info"]["label"].setText(
-        #     f'제{self.seat_data["seat_room"]}열람실 {self.seat_data["seat_number"]}번'
-        # )
-        # # 2. 배정 일시
-        # self.value_labels["time_info"]["label"].setText(
-        #     f'오후 {self.seat_data["assigned_time_start"]} ~ 오후 {self.seat_data["assigned_time_end"]}'
-        # )
-        # # 3. 연장 시간
-        # self.value_labels["extend_time"]["label"].setText(
-        #     f'{self.seat_data["extend_duration"]}{self.value_labels["extend_time"]["suffix"]}'
-        # )
-        # # 4. 예상 종료 시간
-        # self.value_labels["end_time"]["label"].setText(
-        #     f'오후 {self.seat_data["new_end_time"]}'
-        # )
 
         try:
             # 1. 좌석 정보
@@ -259,10 +199,6 @@ class ExtendSeatPage(BasePage):
                 start_str = self._format_time_str(self.seat_data["assigned_time_start"])
                 end_str = self._format_time_str(self.seat_data["assigned_time_end"])
                 self.value_labels["time_info"]["label"].setText(f'{start_str} ~ {end_str}')
-
-                # self.value_labels["time_info"]["label"].setText(
-                #     f'오후 {self.seat_data["assigned_time_start"]} ~ 오후 {self.seat_data["assigned_time_end"]}'
-                # )
             # 3. 연장 시간
             if "extend_time" in self.value_labels:
                 self.value_labels["extend_time"]["label"].setText(
@@ -270,13 +206,9 @@ class ExtendSeatPage(BasePage):
                 )
             # 4. 예상 종료 시간
             if "end_time" in self.value_labels:
-
                 end_time_str = self._format_time_str(self.seat_data["new_end_time"])
                 self.value_labels["end_time"]["label"].setText(f'{end_time_str}')
 
-                # self.value_labels["end_time"]["label"].setText(
-                #     f'오후 {self.seat_data["new_end_time"]}'
-                # )
         except RuntimeError:
             print("Warning: UI 업데이트 중 위젯이 삭제됨")
         except Exception as e:
@@ -289,13 +221,11 @@ class ExtendSeatPage(BasePage):
         current_sid = UserSession.instance().get_user_id()
         
         if not current_sid:
-            # 테스트 중이라 로그인을 안 거쳤다면, 경고 후 리턴 (또는 임시값 사용)
+            # 테스트 중이라 로그인을 안 거쳤다면, 경고 후 리턴
             QMessageBox.critical(self, "오류", "로그인 정보가 없습니다. 다시 로그인해주세요.")
-            # self.switch_callback("main") # 메인으로 튕겨내기 가능
             return
         
         try:
-            # GET /status?sid={CURRENT_USER_SID}
             response = requests.get(
                 f"{API_BASE_URL}/status", 
                 params={"sid": current_sid}
@@ -307,7 +237,7 @@ class ExtendSeatPage(BasePage):
                 
                 if not data_list:
                     QMessageBox.warning(self, "알림", "현재 이용 중인 좌석이 없습니다.")
-                    self.extend_btn.setEnabled(False) # 연장 버튼 비활성화
+                    self.extend_btn.setEnabled(False)
                     return
 
                 # 가장 최근 예약 정보 가져오기 (활성 예약)
@@ -316,37 +246,6 @@ class ExtendSeatPage(BasePage):
                 
                 self.current_reservation_id = reservation['reservation_id']
                 
-            #     # 시간 파싱 (백엔드는 HH:MM:SS 형식 문자열 반환)
-            #     start_str = reservation['start_time']
-            #     end_str = reservation['end_time']
-                
-            #     # 표시용 데이터 업데이트
-            #     self.seat_data["seat_room"] = reservation.get('room_id', '?') # room_id 매핑 필요할 수 있음
-            #     self.seat_data["seat_number"] = str(reservation.get('seat_number', '?'))
-            #     self.seat_data["assigned_time_start"] = start_str[:5] # HH:MM 까지만 표시
-            #     self.seat_data["assigned_time_end"] = end_str[:5]
-                
-            #     # 연장 후 시간 계산 (3시간 더하기)
-            #     # 백엔드 core_service.py의 TIME_FORMAT = '%Y-%m-%d %H:%M:%S' 고려
-            #     # 하지만 status API는 현재 time 필드만 줄 수도 있으므로 주의
-            #     # 여기서는 간단히 end_str(HH:MM:SS)를 파싱해서 3시간 더함
-                
-            #     try:
-            #         end_dt = datetime.strptime(end_str, "%H:%M:%S")
-            #         new_end_dt = end_dt + timedelta(hours=3)
-            #         self.seat_data["new_end_time"] = new_end_dt.strftime("%H:%M")
-            #     except ValueError:
-            #         # 날짜가 포함된 경우 처리 ('2025-11-21 14:00:00')
-            #          end_dt = datetime.strptime(end_str, "%Y-%m-%d %H:%M:%S")
-            #          new_end_dt = end_dt + timedelta(hours=3)
-            #          self.seat_data["new_end_time"] = new_end_dt.strftime("%H:%M")
-
-            #     self.update_ui_labels()
-                
-            # else:
-            #     print(f"Error fetching status: {response.text}")
-            #     QMessageBox.critical(self, "오류", "좌석 정보를 불러오지 못했습니다.")
-
                 # 시간 데이터 처리
                 raw_start = str(reservation['start_time'])
                 raw_end = str(reservation['end_time'])
@@ -411,8 +310,6 @@ class ExtendSeatPage(BasePage):
         current_sid = UserSession.instance().get_user_id()
         
         try:
-            # POST /extend
-            # Body: {"reservation_id": 123, "sid": "..."}
             payload = {
                 "reservation_id": self.current_reservation_id,
                 "sid": current_sid
@@ -421,12 +318,10 @@ class ExtendSeatPage(BasePage):
             response = requests.post(f"{API_BASE_URL}/extend", json=payload)
             
             if response.status_code == 201:
-                # 성공 시 결과 페이지로 이동
                 self.switch_callback("result", mode="extend")
             
             elif response.status_code == 409:
                 # 실패 (정책 위반: 시간 부족, 최대 시간 초과 등)
-                # ✅ [수정 2] 실패 시 예쁜 알림창 띄우고, 확인 누르면 'reservation' 페이지로 이동
                 error_msg = response.json().get("detail", {}).get("message", "연장할 수 없습니다.")
 
                 # QMessageBox.warning(self, "연장 실패", error_msg)
@@ -446,13 +341,9 @@ class ExtendSeatPage(BasePage):
                 CustomAlertDialog(message, self, buttons=buttons).exec()
             
             else:
-                # # 기타 서버 에러
-                # QMessageBox.critical(self, "오류", f"연장 요청 실패 (Code: {response.status_code})")
-                # 기타 서버 에러
                 CustomAlertDialog({"title":"오류", "body":f"연장 요청 실패 (Code: {response.status_code})"}, self).exec()
 
         except Exception as e:
-            # QMessageBox.critical(self, "오류", f"서버 통신 오류: {e}")
             CustomAlertDialog({"title":"오류", "body":f"서버 통신 오류: {e}"}, self).exec()
 
         
@@ -461,12 +352,10 @@ class ExtendSeatPage(BasePage):
         if not time_str or time_str == "-":
             return "-"
         try:
-            # "14:00" -> 14, 0
             hour, minute = map(int, time_str.split(':'))
             
             ampm = "오후" if hour >= 12 else "오전"
             
-            # 12시간제로 변환 (13->1, 0->12)
             display_hour = hour % 12
             if display_hour == 0: 
                 display_hour = 12
