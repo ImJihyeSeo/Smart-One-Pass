@@ -1,7 +1,7 @@
 import uvicorn
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from database import initialize_db # database.py에 정의된 초기화 함수 임포트
+from database import initialize_db
 import pandas as pd
 import os
 

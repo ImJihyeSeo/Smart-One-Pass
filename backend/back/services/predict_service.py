@@ -1,5 +1,3 @@
-# back/services/predict_service.py
-
 import os
 import pandas as pd
 from datetime import datetime
@@ -102,9 +100,6 @@ def predict_library_seats(target_dt: datetime):
 
             # 잔여석 계산
             pred_remain = current_cap - pred_used
-
-            # # 5. 혼잡도 라벨링
-            # status, color = get_status_and_color(pred_remain, current_cap)
             
             # ✅ [추가된 부분] 터미널에 예측값 출력
             print(f"🏫 {room_name.ljust(15)} | 잔여: {str(pred_remain).rjust(3)}석 / {current_cap}석 | 상태: {status}")
