@@ -862,7 +862,7 @@ def execute_extend_reservation(
         cursor.execute(sql_update, (new_end_time_str, res_id, reservation_info['sid']))
         
         conn.commit()
-        return True
+        return True, {}
 
     except psycopg2.Error as e:
         conn.rollback()
