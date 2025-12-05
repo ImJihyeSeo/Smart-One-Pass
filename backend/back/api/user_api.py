@@ -148,35 +148,40 @@ async def check_existence_handler(data: Dict[str, Any]):
     """
     REQUIRED_KEYS = ['sid', 'name']
     
-    # 1. 필수값 검사 (유효성 검사는 프론트엔드에서 완료했다고 가정)
     if not validate_input(data, REQUIRED_KEYS):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="EMPTY_DATA")
     
     sid = data.get('sid')
     name = data.get('name')
     
-    # 2. DB 중복 확인 (core_service 호출)
-    # 🚨 수정된 check_student_exists 함수 호출 (sid 또는 name이 중복인지 확인)
-    # Note: check_student_exists가 True 또는 False를 반환하므로, 
-    #       DB 연결 오류는 여기서는 False로 처리되고 409나 200으로 이어지게 됩니다.
     is_exist = prev_check_student(sid, name) 
     
-    # 3. 응답 반환
     if is_exist:
-        # 🚨 중복 발견 시 409 Conflict 반환
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=error_response(
-                error_code="ALREADY_EXIST",
-                message=f"학번({sid}) 또는 이름({name})이 이미 등록되어 있습니다."
-            )
-        )
-    else:
-        # 중복 없음 (등록 가능)
         return success_response(
-            message="USER_AVAILABLE_FOR_ENROLLMENT",
+            message="STUDENT_VERIFIED",
             status_code=status.HTTP_200_OK,
-            data={"sid": sid, "exists": False}
+            data={"sid": sid, "verified": True}
+        )
+    
+        # raise HTTPException(
+        #     status_code=status.HTTP_409_CONFLICT,
+        #     detail=error_response(
+        #         error_code="ALREADY_EXIST",
+        #         message=f"학번({sid}) 또는 이름({name})이 이미 등록되어 있습니다."
+        #     )
+        # )
+    else:
+        # return success_response(
+        #     message="USER_AVAILABLE_FOR_ENROLLMENT",
+        #     status_code=status.HTTP_200_OK,
+        #     data={"sid": sid, "exists": False}
+        # )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                error_code="USER_NOT_FOUND",
+                message=f"입력하신 학번({sid})과 이름({name})이 일치하는 학생 정보가 없습니다."
+            )
         )
     
 

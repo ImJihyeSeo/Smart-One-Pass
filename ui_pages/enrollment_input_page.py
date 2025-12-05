@@ -58,14 +58,21 @@ class WorkerThread(QThread):
                 data=json.dumps(payload)
             )
             
-            if response.status_code == 409:
-                # 409 Conflict: DB에 이미 존재함 (중복)
-                is_exist = True
-                error_message = response.json().get('detail', {}).get('message', "이미 등록된 사용자입니다.")
             
-            elif response.status_code == 200:
+            if response.status_code == 200:
                 # 200 OK: DB에 중복 없음 (성공)
+                is_exist = True
+            
+            elif response.status_code == 404:
                 is_exist = False
+                detail = response.json().get('detail', {})
+                # detail이 문자열일 수도 있고 dict일 수도 있으므로 처리
+                if isinstance(detail, dict):
+                    error_message = detail.get('message', "일치하는 학생 정보가 없습니다.")
+                else:
+                    error_message = str(detail)
+
+                # error_message = response.json().get('detail', {}).get('message', "이미 등록된 사용자입니다.")
                 
             else:
                 # 400, 500 등 기타 오류
@@ -207,8 +214,11 @@ class EnrollmentInputPage(BasePage):
                 return
                 
             elif error_message:
-                self._show_popup("서버 오류", error_message)
-                return
+                # self._show_popup("서버 오류", error_message)
+                # return
+                # 메시지가 비어있다면 기본 메시지 사용
+                msg = error_message if error_message else "학번 또는 이름이<br>일치하지 않습니다."
+                self._show_popup("확인 실패", msg)
                 
             else:
                 self._show_popup("등록 불가", error_message)
