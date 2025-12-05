@@ -15,19 +15,16 @@ from .base_page import BasePage
 from faceid.face_recognizer import FaceRecognizer, rrect_xyxy
 
 
-# 백엔드 API 연동
 import sys
 import os
 import requests
 
-# 🚨 추가: 세션 매니저 연동 (상위 폴더 접근)
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 try:
     from session_manager import UserSession
 except ImportError:
     print("Warning: session_manager not found")
 
-# 🚨 추가: API 기본 주소 (main.py 설정에 따라 다를 수 있음)
 API_BASE_URL = "http://34.213.241.165:8000"
 
 '''
@@ -248,18 +245,10 @@ class ProcessingPage(BasePage):
                       .format(fps, self.perf_frames, total_elapsed))
                 print("[ProcessingPage] single-frame latency mean={:.2f} ms, p95={:.2f} ms, count={}"
                       .format(stats["mean_ms"], stats["p95_ms"], stats["count"]))
-                # ========================
-
-                # 기존 코드 주석 처리
-                # 얼굴 식별 - AI 모델
-                # success, name, similarity = self.face_rec.identify_face(emb)
                 
                 # 백엔드 API 연동
                 
                 success, found_id, similarity = self.face_rec.identify_face(emb)
-                # -------------------------------------------------------
-                # [API 및 세션 연동] 얼굴 인식 결과 처리
-                # -------------------------------------------------------
                 
                 # 1. 인식된 사용자 정보 가져오기 (갤러리 조회)
                 ident = self.face_rec.gallery.get(found_id)
@@ -293,12 +282,7 @@ class ProcessingPage(BasePage):
                             # 🚨 API 호출: POST /access/record
                             payload = {"sid": student_id}
                             response = requests.post(f"{API_BASE_URL}/access/record", json=payload)
-                            
-                            # if response.status_code == 201:
-                            #     print(f"[Access] Success: {response.json().get('message')}")
-                            # else:
-                            #     print(f"[Access] Failed: {response.text}")
-                            
+                                                        
                             if response.status_code == 200 or response.status_code == 201:
                                 res_json = response.json()
                                 
@@ -323,26 +307,7 @@ class ProcessingPage(BasePage):
                         result_data = (success, self.retries, user_name)
                         self.switch_callback("result", result_data, mode=self.mode)
                         return
-                # 기존의 코드 주석 처리
-                # # result_page로 결과 데이터 전달 (DB 연동 필요)
-                # user_data = None
-                
-                # if success:
-                #     # 실제로는 self.face_rec.gallery에서 student_id 등을 조회해야 함
-                #     # 현재는 face_recognizer.py에서 name을 key로 사용
-                #     ident = self.face_rec.gallery.get(name)
-                #     if ident:
-                #         user_data = {"name": ident.name, "student_id": ident.student_id} 
-                #     else:
-                #         user_data = {"name": name, "student_id": "99999999"} # 더미 학번
-                
-                # if success and self.mode == "auth_reservation":
-                #     # print(f"DEBUG: Face recognition success in reservation mode. Skipping ResultPage.")
-                #     # ReservationPage로 즉시 전환 (data에 학생 정보 전달)
-                #     self.switch_callback("reservation", user_data)
-                #     return
-                
-                
+              
                 # 예약 모드 실패 시: 4개 인자 전달
                 if self.mode == "auth_reservation":
                     result_data = (success, self.retries, found_id, user_data)

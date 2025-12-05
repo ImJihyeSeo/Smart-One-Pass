@@ -2,9 +2,7 @@ from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap
 from ui_style import TOTAL_ATTEMPTS, IDLE_PAGE_STYLE, ImageButtonWidget
-'''
-애플리케이션의 시작/기본 화면을 표시하는 페이지
-'''
+
 class IdlePage(QWidget):
 
     '''
