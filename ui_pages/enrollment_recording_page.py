@@ -208,8 +208,8 @@ class EnrollmentRecordingPage(BasePage):
         frame = cv2.resize(frame, (target_w, target_h))
 
         # AI 모델로 얼굴 특징 및 정보 추출
-        # emb, face_obj, is_live = self.face_rec.embed_biggest(frame, rrect, use_skip=True)
-        emb, face_obj, is_live = self.face_rec.embed_biggest(frame, None, use_skip=True)
+        emb, face_obj, is_live = self.face_rec.embed_biggest(frame, rrect, use_skip=True)
+        # emb, face_obj, is_live = self.face_rec.embed_biggest(frame, None, use_skip=True)
 
         # 가이드 영역 내 얼굴 확인 로직 단순화
         face_in_guide = False
