@@ -794,7 +794,7 @@ def check_extension_validity(
                 "message": f"현재 예약은 이미 최대 허용 시간({int(MAX_TOTAL_DURATION.total_seconds() / 3600)}시간)을 모두 사용했습니다."
             }
         
-        return True
+        return True, {}
         
     except ValueError:
         return False, {
