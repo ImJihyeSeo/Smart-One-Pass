@@ -1,50 +1,95 @@
-# 얼굴 인식 기반 출입 관리 키오스크 애플리케이션
+# Smart One-Pass 📚🧍‍♀️  
+정석학술정보관 얼굴 인식 기반 출입 · 좌석 예약 On-Device 키오스크
 
-## 프로그램 구조
----
-```
-kiosk_gate/
-├── main.py                		           # 메인 애플리케이션 (MainWindow)
-├── ui_style.py               		       # 설정 상수 관리 / 스타일 정의 파일
-├── cv_tools.py             		         # 얼굴 감지/인식 관련 툴 함수
-├── ui_pages/
-│   ├── base_page.py        	           # 공통 헤더 및 컨텐츠 영역을 제공하는 페이지
-│   ├── common_header.py    	           # 로고, 텍스트, X 버튼을 포함한 헤더 위젯
-│   ├── idle_page.py        	           # 시작/대기 화면
-│   ├── processing_page.py 	             # 얼굴 인식 진행 페이지
-│   ├── result_page.py      	           # 인증 + 등록 결과 표시 페이지
-│   ├── enrollment_input_page.py    	 	 # 등록 전 학생 정보 (이름/학번) 입력 받는 페이지
-│   ├── enrollment_start_page.py    		 # 촬영 유의사항 안내 페이지
-│   ├── enrollment_recording_page.py     # 3단계 촬영 진행 페이지
-├── backend/
-│   ├── database.py                     # DB 관련 함수
-│   ├── main.py                         # 나중에 변경할 예정
-│   ├── requirement.txt                 # 필요한 기능 설치
-│   ├── assets/
-│   │   ├── OnePassDB.db                # DB 테이블
-│   │   ├── init.sql                    # SQL 테이블
-│   ├── back/
-│   │   ├── api/
-│   │   │   ├── access_api.py           # 출입 관련 API
-│   │   │   ├── seat_api.py             # 좌석 예약 API
-│   │   │   ├── user_api.py             # 학생 정보 관련 API
-│   │   ├── services/
-│   │   │   ├── core_service.py         # API 핵심 내부 함수
-│   │   ├── utils/
-│   │   │   ├── helper_function.py      # API 공통 내부 함수
-└── resources/             	 	           # 이미지, 아이콘 파일
-```
+## 📝 프로젝트 개요
 
-## 환경 설정
----
-Python 3.9 이상 환경에서 프로젝트를 실행해야 한다. 필요한 라이브러리를 설치한다.
-```
-pip install pyside6 opencv-python numpy
-```
+Smart One-Pass는 정석학술정보관 출입과 열람실 좌석 예약을 **얼굴 인식 기반**으로 처리하는 On-Device 키오스크 시스템입니다.
 
-## 어플리케이션 실행
+학생증 분실·미소지, 모바일 열람증 QR 실행의 번거로움 등 기존 출입 방식의 불편을 줄이고,  
+얼굴 인식과 열람실 혼잡도 예측을 통해 **출입·예약 절차를 단순화**하고 **공간 활용 효율**을 높이는 것을 목표로 합니다.
+
 ---
-프로젝트 루트 디렉토리에서 main.py를 실행한다.
-```
-python main.py
-```
+
+## 👥 Team 대면대면 
+
+- **김동진** – 백엔드 API 및 열람실 혼잡도 예측 모델 개발
+- **김지원** – 키오스크 UI 개발, 스푸핑 방지 모델 연동 및 좌석 데이터 수집
+- **서지혜** – 얼굴 인식 파이프라인 및 최적화, 라즈베리파이 연동 및 키오스크 외형 설계
+
+---
+
+## ⚡ 주요 기능
+
+- **얼굴 인식 기반 출입 관리**
+  - InsightFace 임베딩 기반 정석 구성원 얼굴 인증
+  - 등록 얼굴 벡터와의 거리 기반 매칭
+
+- **스푸핑 방지(겹쳐보기 공격 차단)**
+  - ONNX 기반 Face Anti-Spoofing 모델 사용
+  - 사진·영상 공격 탐지 후 출입/예약 차단
+
+- **열람실 좌석 예약 · 혼잡도 예측**
+  - 열람실별 현재 좌석 현황 조회
+  - 혼잡도 예측 모델 기반 예상 좌석 여유도 제공
+  - 예약·반납·연장 기능 지원
+
+- **온디바이스 키오스크 클라이언트**
+  - PySide6 기반 세로형 터치 모니터 UI
+  - 캡처 워커 / 얼굴 인식 워커 스레드 분리로 실시간 처리
+  - 출입/예약 상태에 따른 안내 메시지 · 강조 색상(테두리 등) 표시
+
+---
+
+## 🛠 기술 스택
+
+- **프론트엔드**: Python (PySide6 / Qt for GUI)
+
+- **백엔드**: FastAPI, PostgreSQL(AWS RDS), AWS EC2
+
+- **얼굴 인식 · 스푸핑 방지 AI**: InsightFace, ONNX 기반 Anti-Spoofing
+
+---
+
+## 📊 AI 모델 성능
+
+판넬 기준 주요 성능 지표는 아래와 같습니다.  
+
+### 얼굴 인식 모델 (InsightFace, RFW-Asian)
+
+| Metric            | Score   |
+|-------------------|---------|
+| Accuracy          | 98.28%  |
+| EER               | 1.70%   |
+| TPR@FAR=1%        | 97.37%  |
+
+### 스푸핑 방지 모델 (Face Anti-Spoofing)
+
+| Metric    | Score   |
+|-----------|---------|
+| Accuracy  | 92.92%  |
+| Precision | 97.42%  |
+| F1-score  | 93.81%  |
+
+### 열람실 혼잡도 예측 모델
+
+| Metric                 | Best   | Avg    |
+|------------------------|--------|--------|
+| Error Rate             | 5.16%  | 9.86%  |
+| Prediction Accuracy    | 81.61% | 74.88% |
+
+---
+
+## 📊 온디바이스 실행 성능 (Raspberry Pi 5 기준)
+
+- **테스트 환경**  
+  - Raspberry Pi 5  
+  - ProcessingPage 기준 (얼굴 인식 + 스푸핑 포함 전체 파이프라인)
+
+- **처리 속도**  
+  - 실시간 프리뷰: 약 **24.8 FPS** (`96 frames / 3.87 s`)  
+  - 단일 프레임 지연: 평균 **약 388 ms**, p95 **약 398 ms**
+
+- **최적화 요약**  
+  - CaptureWorker / FaceWorker 분리로 캡처·인식 병렬 처리  
+  - OpenCV 및 BLAS 라이브러리 단일 스레드 설정  
+  - 얼굴 인식 / 스푸핑 ONNX 세션 재사용으로 로딩 오버헤드 최소화
