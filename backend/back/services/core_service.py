@@ -45,7 +45,7 @@ def prev_check_student(sid: str, name: str) -> bool:
         cursor = conn.cursor()
         
         # sid가 일치하거나 OR name이 일치하는 레코드가 있는지 조회합니다.
-        sql = "SELECT sid FROM students WHERE sid = %s OR name = %s"
+        sql = "SELECT sid FROM students WHERE sid = %s AND name = %s"
         
         # sid와 name을 모두 전달합니다.
         cursor.execute(sql, (sid, name))
