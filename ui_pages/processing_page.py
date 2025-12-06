@@ -6,14 +6,14 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect, QFrame,
     QGraphicsOpacityEffect
 )
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QAbstractAnimation, QEasingCurve, QSequentialAnimationGroup
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QAbstractAnimation, QEasingCurve, QSequentialAnimationGroup, QThread, Signal
 from PySide6.QtGui import QPixmap, QImage, QPainter, QBitmap, QColor
 
 from ui_style import TARGET_W, TARGET_H, MESSAGE_AREA_HEIGHT, BORDER_RADIUS, GUIDE_STYLE
 from .base_page import BasePage
 
 from faceid.face_recognizer import FaceRecognizer, rrect_xyxy
-
+from faceid.face_worker import FaceWorker
 
 import sys
 import os
@@ -31,6 +31,7 @@ API_BASE_URL = "http://34.213.241.165:8000"
 웹캠 화면 표시하고, 얼굴 인식 과정을 시각적으로 처리해 결과를 result_page로 넘기는 페이지
 '''
 class ProcessingPage(BasePage):
+    requestInference = Signal(object)   # UI → Worker 로 프레임 보내는 시그널
     '''
     UI 구성, QTimer 시작
     '''
@@ -140,14 +141,30 @@ class ProcessingPage(BasePage):
 
         self.setLayout(main_layout)
 
+         # ---- Worker/QThread 설정 ----
+        self.worker_thread = QThread(self)
+        self.worker = FaceWorker(self.face_rec)
+        self.worker.moveToThread(self.worker_thread)
+
+        # 시그널 연결
+        self.requestInference.connect(self.worker.process_frame)
+        self.worker.resultReady.connect(self.on_face_result)
+
+        self.worker_thread.start()
+
+        # worker가 바쁠 때 중복 요청 막기용 플래그
+        self.worker_busy = False
+
+        # QTimer 시작
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
-        
-        # 성능 측정용
+
+        # 성능 측정
         self.perf_start = time.time()
         self.perf_frames = 0
         self.face_rec.reset_stats()
+        
 
     def update_frame(self):
         if not self.cap.isOpened():
@@ -184,154 +201,165 @@ class ProcessingPage(BasePage):
         h, w, _ = frame.shape
         rrect = rrect_xyxy(h,w)
         
-        # --------------------------
-        # AI 모델 / 감지 로직
-        # --------------------------
-        # 가이드 영역
-        guide_width = int(target_w * 0.5)
-        guide_x1 = (target_w - guide_width) // 2
-        guide_y1 = (target_h - guide_width) // 2
-        guide_x2 = guide_x1 + guide_width
-        guide_y2 = guide_y1 + guide_width
+        # # --------------------------
+        # # AI 모델 / 감지 로직
+        # # --------------------------
+        # # 가이드 영역
+        # guide_width = int(target_w * 0.5)
+        # guide_x1 = (target_w - guide_width) // 2
+        # guide_y1 = (target_h - guide_width) // 2
+        # guide_x2 = guide_x1 + guide_width
+        # guide_y2 = guide_y1 + guide_width
         
-        # 얼굴 감지 / 임베딩 추출
-        emb, face_obj, is_live = self.face_rec.embed_biggest(frame, rrect, use_skip=True)
+        # # 얼굴 감지 / 임베딩 추출
+        # emb, face_obj, is_live = self.face_rec.embed_biggest(frame, rrect, use_skip=True)
 
-        # 가이드라인 영역에 얼굴 중심 있는지 확인 (InsightFace 결과만 사용)
-        face_in_guide = False
-        if face_obj is not None:
-            bx1, by1, bx2, by2 = map(int, face_obj.bbox)
-            cx, cy = (bx1 + bx2) // 2, (by1 + by2) // 2
-            if guide_x1 < cx < guide_x2 and guide_y1 < cy < guide_y2:
-                face_in_guide = True
+        # # 가이드라인 영역에 얼굴 중심 있는지 확인 (InsightFace 결과만 사용)
+        # face_in_guide = False
+        # if face_obj is not None:
+        #     bx1, by1, bx2, by2 = map(int, face_obj.bbox)
+        #     cx, cy = (bx1 + bx2) // 2, (by1 + by2) // 2
+        #     if guide_x1 < cx < guide_x2 and guide_y1 < cy < guide_y2:
+        #         face_in_guide = True
         
-        # --------------------------
-        # UI 상태 제어
-        # --------------------------
+        # # --------------------------
+        # # UI 상태 제어
+        # # --------------------------
 
-        # 1. 스푸핑 실패 (감지 성공)
-        if face_in_guide and not is_live: 
-            if self.guide_animation.state() == QAbstractAnimation.Running:
-                self.guide_animation.stop()
-            self.guide_opacity_effect.setOpacity(1.0) 
-            self.start_time = None
+        # # 1. 스푸핑 실패 (감지 성공)
+        # if face_in_guide and not is_live: 
+        #     if self.guide_animation.state() == QAbstractAnimation.Running:
+        #         self.guide_animation.stop()
+        #     self.guide_opacity_effect.setOpacity(1.0) 
+        #     self.start_time = None
             
-            self.instruction.setText("※ 실제 얼굴이 아닙니다! ※")
-            self.instruction.setStyleSheet(f"{GUIDE_STYLE} color: #ff4444;")            
-            self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(255, 0, 0, 150); border-radius: {self.BORDER_RADIUS}px; }}") 
+        #     self.instruction.setText("※ 실제 얼굴이 아닙니다! ※")
+        #     self.instruction.setStyleSheet(f"{GUIDE_STYLE} color: #ff4444;")            
+        #     self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(255, 0, 0, 150); border-radius: {self.BORDER_RADIUS}px; }}") 
         
-        # 2. 정상적인 얼굴 인식
-        elif face_in_guide and emb is not None and is_live: 
-            if self.start_time is None:
-                self.start_time = time.time()
-                self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(0, 0, 0, 40); border-radius: {self.BORDER_RADIUS}px; }}")
+        # # 2. 정상적인 얼굴 인식
+        # elif face_in_guide and emb is not None and is_live: 
+        #     if self.start_time is None:
+        #         self.start_time = time.time()
+        #         self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(0, 0, 0, 40); border-radius: {self.BORDER_RADIUS}px; }}")
 
-            if self.guide_image_label.isVisible() and self.guide_animation.state() != QAbstractAnimation.Running:
-                self.guide_animation.start()
+        #     if self.guide_image_label.isVisible() and self.guide_animation.state() != QAbstractAnimation.Running:
+        #         self.guide_animation.start()
                 
-            self.instruction.setText(f"얼굴을 인식 중입니다. 잠시만 기다려주세요.")
-            self.instruction.setStyleSheet(GUIDE_STYLE)
+        #     self.instruction.setText(f"얼굴을 인식 중입니다. 잠시만 기다려주세요.")
+        #     self.instruction.setStyleSheet(GUIDE_STYLE)
 
-            elapsed = time.time() - self.start_time
-            if elapsed >= self.duration:
-                self.timer.stop()
-                self.guide_animation.stop()
+        #     elapsed = time.time() - self.start_time
+        #     if elapsed >= self.duration:
+        #         self.timer.stop()
+        #         self.guide_animation.stop()
                 
-                # ==== 성능 요약 출력 ====
-                total_elapsed = time.time() - self.perf_start
-                fps = self.perf_frames / total_elapsed if total_elapsed > 0 else 0.0
-                stats = self.face_rec.get_latency_stats()
-                print("[ProcessingPage] FPS={:.2f}, frames={}, elapsed={:.2f}s"
-                      .format(fps, self.perf_frames, total_elapsed))
-                print("[ProcessingPage] single-frame latency mean={:.2f} ms, p95={:.2f} ms, count={}"
-                      .format(stats["mean_ms"], stats["p95_ms"], stats["count"]))
+        #         # ==== 성능 요약 출력 ====
+        #         total_elapsed = time.time() - self.perf_start
+        #         fps = self.perf_frames / total_elapsed if total_elapsed > 0 else 0.0
+        #         stats = self.face_rec.get_latency_stats()
+        #         print("[ProcessingPage] FPS={:.2f}, frames={}, elapsed={:.2f}s"
+        #               .format(fps, self.perf_frames, total_elapsed))
+        #         print("[ProcessingPage] single-frame latency mean={:.2f} ms, p95={:.2f} ms, count={}"
+        #               .format(stats["mean_ms"], stats["p95_ms"], stats["count"]))
                 
-                # 백엔드 API 연동
+        #         # 백엔드 API 연동
                 
-                success, found_id, similarity = self.face_rec.identify_face(emb)
+        #         success, found_id, similarity = self.face_rec.identify_face(emb)
                 
-                # 1. 인식된 사용자 정보 가져오기 (갤러리 조회)
-                ident = self.face_rec.gallery.get(found_id)
-                if ident:
-                    student_id = ident.student_id # 혹은 found_id 그대로 사용
-                    user_name = ident.name
-                else:
-                    # 인식은 됐는데 갤러리에 키가 없는 경우 (거의 없겠지만 방어 코드)
-                    student_id = "99999999"
-                    user_name = "Unknown"
+        #         # 1. 인식된 사용자 정보 가져오기 (갤러리 조회)
+        #         ident = self.face_rec.gallery.get(found_id)
+        #         if ident:
+        #             student_id = ident.student_id # 혹은 found_id 그대로 사용
+        #             user_name = ident.name
+        #         else:
+        #             # 인식은 됐는데 갤러리에 키가 없는 경우 (거의 없겠지만 방어 코드)
+        #             student_id = "99999999"
+        #             user_name = "Unknown"
                 
-                user_data = {"name": user_name, "student_id": student_id}
+        #         user_data = {"name": user_name, "student_id": student_id}
     
-                if success:
-                    # [상황 B] 좌석 예약 모드: 세션 로그인 후 예약 페이지로 이동
-                    if self.mode == "auth_reservation":
-                        try:
-                            # 세션에 학번 저장 (다음 페이지에서 API 호출 시 사용)
-                            UserSession.instance().login(user_id=student_id, name=user_name)
-                            print(f"[Auth] Logged in: {user_name} ({student_id})")
-                        except Exception as e:
-                            print(f"Session Error: {e}")
+        #         if success:
+        #             # [상황 B] 좌석 예약 모드: 세션 로그인 후 예약 페이지로 이동
+        #             if self.mode == "auth_reservation":
+        #                 try:
+        #                     # 세션에 학번 저장 (다음 페이지에서 API 호출 시 사용)
+        #                     UserSession.instance().login(user_id=student_id, name=user_name)
+        #                     print(f"[Auth] Logged in: {user_name} ({student_id})")
+        #                 except Exception as e:
+        #                     print(f"Session Error: {e}")
                             
-                        # 예약 페이지로 이동
-                        self.switch_callback("reservation", user_data)
-                        return
+        #                 # 예약 페이지로 이동
+        #                 self.switch_callback("reservation", user_data)
+        #                 return
 
-                    # [상황 A] 출입 인증 모드 (기본): 서버에 출입 기록 전송
-                    else:
-                        try:
-                            # 🚨 API 호출: POST /access/record
-                            payload = {"sid": student_id}
-                            response = requests.post(f"{API_BASE_URL}/access/record", json=payload)
+        #             # [상황 A] 출입 인증 모드 (기본): 서버에 출입 기록 전송
+        #             else:
+        #                 try:
+        #                     # 🚨 API 호출: POST /access/record
+        #                     payload = {"sid": student_id}
+        #                     response = requests.post(f"{API_BASE_URL}/access/record", json=payload)
                                                         
-                            if response.status_code == 200 or response.status_code == 201:
-                                res_json = response.json()
+        #                     if response.status_code == 200 or response.status_code == 201:
+        #                         res_json = response.json()
                                 
-                                # 🚨 [추가] 서버가 리스트로 보냈을 경우, 첫 번째 요소만 꺼내기
-                                if isinstance(res_json, list):
-                                    res_json = res_json[0]
+        #                         # 🚨 [추가] 서버가 리스트로 보냈을 경우, 첫 번째 요소만 꺼내기
+        #                         if isinstance(res_json, list):
+        #                             res_json = res_json[0]
                                     
-                                # 이제 res_json은 항상 딕셔너리({})가 됩니다.
-                                if res_json.get("success"):
-                                    print(f"✅ [Access] Success: {res_json.get('message')}")
-                                    # (성공 처리 로직...)
-                                else:
-                                    print(f"❌ [Access] Failed: {res_json}")
-                            else:
-                                print(f"❌ [Access] HTTP Error: {response.status_code}")
+        #                         # 이제 res_json은 항상 딕셔너리({})가 됩니다.
+        #                         if res_json.get("success"):
+        #                             print(f"✅ [Access] Success: {res_json.get('message')}")
+        #                             # (성공 처리 로직...)
+        #                         else:
+        #                             print(f"❌ [Access] Failed: {res_json}")
+        #                     else:
+        #                         print(f"❌ [Access] HTTP Error: {response.status_code}")
                                 
-                        except Exception as e:
-                            print(f"Network Error during access record: {e}")
-                            # 네트워크 오류가 나더라도 UI 흐름은 끊지 않고 결과 페이지로 이동 (선택 사항)
+        #                 except Exception as e:
+        #                     print(f"Network Error during access record: {e}")
+        #                     # 네트워크 오류가 나더라도 UI 흐름은 끊지 않고 결과 페이지로 이동 (선택 사항)
 
-                        # 결과 페이지로 이동
-                        result_data = (success, self.retries, user_name)
-                        self.switch_callback("result", result_data, mode=self.mode)
-                        return
+        #                 # 결과 페이지로 이동
+        #                 result_data = (success, self.retries, user_name)
+        #                 self.switch_callback("result", result_data, mode=self.mode)
+        #                 return
               
-                # 예약 모드 실패 시: 4개 인자 전달
-                if self.mode == "auth_reservation":
-                    result_data = (success, self.retries, found_id, user_data)
-                else:   # 출입 인증 모드(기본값) 및 기타 모드: 3개 인자 전달
-                    result_data = (success, self.retries, found_id) 
+        #         # 예약 모드 실패 시: 4개 인자 전달
+        #         if self.mode == "auth_reservation":
+        #             result_data = (success, self.retries, found_id, user_data)
+        #         else:   # 출입 인증 모드(기본값) 및 기타 모드: 3개 인자 전달
+        #             result_data = (success, self.retries, found_id) 
                 
-                self.switch_callback("result", result_data, mode=self.mode)
+        #         self.switch_callback("result", result_data, mode=self.mode)
         
-        # 3. 얼굴 미감지
-        else:
-            if self.guide_animation.state() == QAbstractAnimation.Running:
-                self.guide_animation.stop()
-            self.guide_opacity_effect.setOpacity(1.0) 
-            self.start_time = None
-            self.instruction.setText("※ 얼굴 인식을 시작하려면 화면을 바라봐주세요 ※")
-            self.instruction.setStyleSheet(GUIDE_STYLE)
-            self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(0, 0, 0, 80); border-radius: {self.BORDER_RADIUS}px; }}")
+        # # 3. 얼굴 미감지
+        # else:
+        #     if self.guide_animation.state() == QAbstractAnimation.Running:
+        #         self.guide_animation.stop()
+        #     self.guide_opacity_effect.setOpacity(1.0) 
+        #     self.start_time = None
+        #     self.instruction.setText("※ 얼굴 인식을 시작하려면 화면을 바라봐주세요 ※")
+        #     self.instruction.setStyleSheet(GUIDE_STYLE)
+        #     self.overlay_frame.setStyleSheet(f"QFrame {{ background-color: rgba(0, 0, 0, 80); border-radius: {self.BORDER_RADIUS}px; }}")
 
-        # QPixmap으로 변환
+        # --------- 여기서부터는 Worker에게만 맡김 ---------
+        if not self.worker_busy:
+            data = {
+                "frame": frame.copy(),   # Worker에서 쓸 복사본
+                "rrect": rrect,
+                "mode": self.mode,
+                "retries": self.retries,
+            }
+            self.worker_busy = True
+            self.requestInference.emit(data)
+
+        # --------- 화면 그리기만 UI 스레드에서 ---------
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        qimg = QImage(rgb_frame.data, frame.shape[1], frame.shape[0], 3*frame.shape[1], QImage.Format_RGB888)
+        qimg = QImage(rgb_frame.data, frame.shape[1], frame.shape[0],
+                      3 * frame.shape[1], QImage.Format_RGB888)
         qpixmap = QPixmap.fromImage(qimg)
-        
-        # QBitmap 마스킹
+
         mask = QBitmap(qpixmap.size())
         mask.fill(Qt.color0)
         painter = QPainter(mask)
@@ -342,9 +370,176 @@ class ProcessingPage(BasePage):
         qpixmap.setMask(mask)
 
         self.video_label.setPixmap(qpixmap)
+        
+    def on_face_result(self, result: dict):
+        # Worker 한 번 끝났으니 다음 프레임 요청 가능
+        self.worker_busy = False
 
+        emb         = result.get("emb")
+        face_obj    = result.get("face_obj")
+        is_live     = result.get("is_live")
+        success     = result.get("success")
+        found_id    = result.get("found_id")
+        user_name   = result.get("user_name")
+        student_id  = result.get("student_id")
+        mode        = result.get("mode") or self.mode
+        retries     = result.get("retries", self.retries)
+
+        target_w, target_h = self.TARGET_W, self.TARGET_H
+        guide_width = int(target_w * 0.5)
+        guide_x1 = (target_w - guide_width) // 2
+        guide_y1 = (target_h - guide_width) // 2
+        guide_x2 = guide_x1 + guide_width
+        guide_y2 = guide_y1 + guide_width
+
+        face_in_guide = False
+        if face_obj is not None:
+            bx1, by1, bx2, by2 = map(int, face_obj.bbox)
+            cx, cy = (bx1 + bx2) // 2, (by1 + by2) // 2
+            if guide_x1 < cx < guide_x2 and guide_y1 < cy < guide_y2:
+                face_in_guide = True
+
+        # -----------------------------------
+        # 1) 스푸핑 (가이드 안에 얼굴은 있는데 live 아님)
+        # -----------------------------------
+        if face_in_guide and not is_live:
+            if self.guide_animation.state() == QAbstractAnimation.Running:
+                self.guide_animation.stop()
+            self.guide_opacity_effect.setOpacity(1.0)
+            self.start_time = None
+            self.instruction.setText("※ 실제 얼굴이 아닙니다! ※")
+            self.instruction.setStyleSheet(f"{GUIDE_STYLE} color: #ff4444;")
+            self.overlay_frame.setStyleSheet(
+                f"QFrame {{ background-color: rgba(255, 0, 0, 150); "
+                f"border-radius: {self.BORDER_RADIUS}px; }}"
+            )
+            return
+
+        # -----------------------------------
+        # 2) 정상 얼굴 + 라이브
+        #    → 3초 동안 안정적으로 잡히면 최종 판정
+        # -----------------------------------
+        if face_in_guide and emb is not None and is_live:
+            if self.start_time is None:
+                self.start_time = time.time()
+                self.overlay_frame.setStyleSheet(
+                    f"QFrame {{ background-color: rgba(0, 0, 0, 40); "
+                    f"border-radius: {self.BORDER_RADIUS}px; }}"
+                )
+
+            if self.guide_image_label.isVisible() and \
+               self.guide_animation.state() != QAbstractAnimation.Running:
+                self.guide_animation.start()
+
+            self.instruction.setText("얼굴을 인식 중입니다. 잠시만 기다려주세요.")
+            self.instruction.setStyleSheet(GUIDE_STYLE)
+
+            elapsed = time.time() - self.start_time
+            if elapsed < self.duration:
+                # 아직 3초 안 됨 → 계속 관찰
+                return
+
+            # ---- 여기서부터는 3초 동안 안정적으로 인식된 상태 → 최종 종료 처리 ----
+            total_elapsed = time.time() - self.perf_start
+            fps = self.perf_frames / total_elapsed if total_elapsed > 0 else 0.0
+            stats = self.face_rec.get_latency_stats()
+            print("[ProcessingPage] FPS={:.2f}, frames={}, elapsed={:.2f}s"
+                  .format(fps, self.perf_frames, total_elapsed))
+            print("[ProcessingPage] single-frame latency mean={:.2f} ms, "
+                  "p95={:.2f} ms, count={}"
+                  .format(stats["mean_ms"], stats["p95_ms"], stats["count"]))
+
+            # ---- 성공 케이스 ----
+            if success and student_id and user_name:
+                if mode == "auth_reservation":
+                    # 좌석 예약 모드: 세션 로그인 후 예약 페이지로 이동
+                    try:
+                        UserSession.instance().login(user_id=student_id, name=user_name)
+                    except Exception as e:
+                        print(f"Session Error: {e}")
+
+                    user_data = {"name": user_name, "student_id": student_id}
+                    self._finish_and_go("reservation", user_data)
+                    return
+                else:
+                    # 출입 인증 모드: 서버에 출입 기록 전송
+                    try:
+                        payload = {"sid": student_id}
+                        response = requests.post(f"{API_BASE_URL}/access/record", json=payload)
+                        if response.status_code in (200, 201):
+                            res_json = response.json()
+                            if isinstance(res_json, list):
+                                res_json = res_json[0]
+                            if res_json.get("success"):
+                                print(f"✅ [Access] Success: {res_json.get('message')}")
+                            else:
+                                print(f"❌ [Access] Failed: {res_json}")
+                        else:
+                            print(f"❌ [Access] HTTP Error: {response.status_code}")
+                    except Exception as e:
+                        print(f"Network Error during access record: {e}")
+
+                    result_data = (success, retries, user_name)
+                    self._finish_and_go("result", result_data, mode=mode)
+                    return
+
+            # ---- 인식 실패 케이스 (3초는 채웠는데 success=False 등) ----
+            if mode == "auth_reservation":
+                user_data = {"name": user_name, "student_id": student_id}
+                result_data = (success, retries, found_id, user_data)
+            else:
+                result_data = (success, retries, found_id)
+
+            self._finish_and_go("result", result_data, mode=mode)
+            return
+
+        # -----------------------------------
+        # 3) 얼굴 없음 / 가이드 밖
+        #    → 페이지 유지, 안내 문구만 초기화
+        # -----------------------------------
+        if self.guide_animation.state() == QAbstractAnimation.Running:
+            self.guide_animation.stop()
+        self.guide_opacity_effect.setOpacity(1.0)
+        self.start_time = None
+        self.instruction.setText("※ 얼굴 인식을 시작하려면 화면을 바라봐주세요 ※")
+        self.instruction.setStyleSheet(GUIDE_STYLE)
+        self.overlay_frame.setStyleSheet(
+            f"QFrame {{ background-color: rgba(0, 0, 0, 80); "
+            f"border-radius: {self.BORDER_RADIUS}px; }}"
+        )
+
+        
+    def _stop_worker_thread(self):
+        # 이미 정리됐으면 무시
+        if hasattr(self, "worker_thread") and self.worker_thread is not None:
+            if self.worker_thread.isRunning():
+                self.worker_thread.quit()
+                self.worker_thread.wait()
+                
+    def _finish_and_go(self, target_page: str, *args, **kwargs):
+        # 타이머/애니메이션/스레드 안전 정리 후 페이지 전환
+        if hasattr(self, "timer") and self.timer.isActive():
+            self.timer.stop()
+        if hasattr(self, "guide_animation") and \
+           self.guide_animation.state() == QAbstractAnimation.Running:
+            self.guide_animation.stop()
+        self._stop_worker_thread()
+        self.switch_callback(target_page, *args, **kwargs)
+
+            
     def closeEvent(self, event):
         if hasattr(self, 'guide_animation') and self.guide_animation.state() == QAbstractAnimation.Running:
             self.guide_animation.stop()
-        self.timer.stop()
+        if hasattr(self, 'timer'):
+            self.timer.stop()
+        
+        self._stop_worker_thread()
+
         super().closeEvent(event)
+
+
+    # def closeEvent(self, event):
+    #     if hasattr(self, 'guide_animation') and self.guide_animation.state() == QAbstractAnimation.Running:
+    #         self.guide_animation.stop()
+    #     self.timer.stop()
+    #     super().closeEvent(event)
