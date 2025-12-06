@@ -280,10 +280,29 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# InsightFace/결과물
-fr/models/
-fr/data/
-fr/outputs/
-**/__pycache__/
+# InsightFace / Anti-Spoofing / 런타임 결과물 (Smart One-Pass 전용)
 
-# End of https://www.toptal.com/developers/gitignore/api/python,c++,linux,windows,macos
+# (예전에 쓰던 fr/ 디렉터리 관련 규칙은 삭제)
+# fr/models/
+# fr/data/
+# fr/outputs/
+
+# 가상환경 (현재 디렉토리명 venv.)
+venv./
+
+# 얼굴 인식/스푸핑 모델 가중치 파일 (용량 큼, 레포에 포함 X)
+faceid/**/*.onnx
+faceid/**/*.bin
+faceid/**/*.pth
+
+# 얼굴 갤러리 및 런타임 생성 데이터 (개인정보·임시 결과물)
+faceid/gallery/
+faceid/outputs/
+faceid/tmp/
+faceid/logs/
+
+# 백엔드 쪽 로컬 환경 파일/가상환경 (있다면)
+backend/.env
+backend/.venv/
+backend/venv/
+backend/env/
